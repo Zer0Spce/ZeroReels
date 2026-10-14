@@ -14,6 +14,8 @@ from .quality_orchestration import install as install_quality_orchestration
 from .quality_ui import install as install_quality_ui
 from .layout_polish import install as install_layout_polish
 from .v051_hotfix import install as install_v051_hotfix
+from .v052_script_base import install as install_v052_script_base
+from .v052_hotfix import install as install_v052_hotfix
 
 
 def main() -> int:
@@ -24,8 +26,11 @@ def main() -> int:
     install_quality_orchestration()
     install_quality_ui()
     install_layout_polish()
-    # Keep this last: it normalizes the final widget tree after the v0.5 quality layers.
     install_v051_hotfix()
+    # v0.5.2 removes the exact-image reuse planning pass, then installs the
+    # final repetition/continuity/live-feedback guard on top of the stable UI.
+    install_v052_script_base()
+    install_v052_hotfix()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
