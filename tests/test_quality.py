@@ -1,7 +1,7 @@
 from zeroreels.config import Settings
 from zeroreels.models import Project, Scene
 from zeroreels.services import CaptionService, FFmpegRenderer, MockImageService, MockVoiceService, ComfyImageService
-from zeroreels import quality_services
+from zeroreels import quality_services, renderer_fix
 
 
 def _mock_project(tmp_path):
@@ -23,8 +23,8 @@ def test_caption_groups_prefer_phrase_breaks():
     assert all(len(group) <= 6 for group in groups)
 
 
-def test_comfy_workflow_reuses_explicit_seed():
-    quality_services.install()
+def test_comfy_workflow_reuses_explicit_seed(monkeypatch):
+    monkeypatch.setattr(ComfyImageService, "_workflow", quality_services._quality_workflow)
     service = ComfyImageService(Settings())
     workflow_a = service._workflow("same person, close shot [ZR-SEED=424242]", "1:1")
     workflow_b = service._workflow("same person, wide shot [ZR-SEED=424242]", "1:1")
@@ -33,8 +33,15 @@ def test_comfy_workflow_reuses_explicit_seed():
     assert "ZR-SEED" not in workflow_a["4"]["inputs"]["text"]
 
 
-def test_quality_render_creates_mp4_with_bottom_small_captions(tmp_path):
-    quality_services.install()
+def test_quality_render_creates_mp4_with_bottom_small_captions(tmp_path, monkeypatch):
+    monkeypatch.setattr(CaptionService, "generate_from_scenes", quality_services._human_captions)
+    monkeypatch.setattr(FFmpegRenderer, "_caption_filter", quality_services._caption_filter)
+    monkeypatch.setattr(FFmpegRenderer, "_scene_filter", quality_services._scene_filter)
+    monkeypatch.setattr(FFmpegRenderer, "_transition_config", quality_services._transition_config, raising=False)
+    monkeypatch.setattr(FFmpegRenderer, "_render_scene_clips", quality_services._render_scene_clips)
+    monkeypatch.setattr(FFmpegRenderer, "_combine_filter", renderer_fix._combine_filter_cfr)
+    monkeypatch.setattr(FFmpegRenderer, "render", quality_services._render)
+
     project = _mock_project(tmp_path)
     audio = MockVoiceService().generate(project, tmp_path)
     captions = CaptionService().generate_from_scenes(project, tmp_path)
