@@ -39,6 +39,9 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         from zeroreels.v070_render import install as install_v070_render
         from zeroreels.v070_guardrails import install as install_v070_guardrails
         from zeroreels.v070_ui import install as install_v070_ui
+        from zeroreels.v070_setup_extra import install as install_v070_setup_extra
+        from zeroreels.v071_pipeline import install as install_v071_pipeline
+        from zeroreels.v071_ui import install as install_v071_ui
 
         install_live_setup()
         install_model_browse()
@@ -63,17 +66,44 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         install_v070_render()
         install_v070_guardrails()
         install_v070_ui()
+        install_v070_setup_extra()
+        install_v071_pipeline()
+        install_v071_ui()
 
         app = QApplication([])
         app.setStyle("Fusion")
         app.setStyleSheet(ui.build_stylesheet())
         window = MainWindow()
+        window.resize(1584, 951)
+        window.show()
+        app.processEvents()
+
+        # Regression for the v0.7 screenshot: interactive controls must never collapse
+        # into clipped slivers even after Human Touch rows are added.
+        assert hasattr(window, "create_scroll_area")
+        for control in [
+            window.format_box, window.style_box, window.seconds, window.scene_count,
+            window.continuity_box, window.caption_position_box, window.caption_size_box,
+            window.transition_style_box, window.caption_style_box, window.soundtrack_box,
+            window.voice_engine_box, window.voice_delivery_box, window.image_source_box,
+        ]:
+            assert control.minimumHeight() >= 38, (control, control.minimumHeight())
+            assert control.height() >= 38, (control, control.height())
+
+        # Minimum supported window size uses scrolling instead of crushing the controls.
+        window.resize(1120, 720)
+        app.processEvents()
+        assert window.image_source_box.height() >= 38
+        assert window.generate.height() >= 38
+
         window.topic.setPlainText("A tiny lighthouse test")
         window.test_mode.setChecked(True)
         window.format_box.setCurrentText("1:1")
         window.seconds.setMinimum(15)
         window.seconds.setValue(15)
         window.scene_count.setValue(3)
+        window.image_source_box.setCurrentText("AI Generated")
+        window.research_grounding_check.setChecked(False)
 
         assert window.style_box.currentText() == "TikTok Story"
         assert window.transition_style_box.currentText() == "Story Rhythm"
@@ -86,6 +116,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         assert window.visual_qa_v2_check.isChecked()
         assert window.dynamic_visual_pacing_check.isChecked()
         assert window.continuity_box.findText("Hero Character Lock") >= 0
+        assert window.image_source_box.currentText() == "AI Generated"
 
         window.generate.click()
         app.processEvents()
@@ -95,6 +126,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         assert "Starting a new ZeroReels generation" in initial_log
         assert "Live stage tracking connected" in initial_log
         assert "Human Touch:" in initial_log
+        assert "Reality Mix:" in initial_log
 
         deadline = time.time() + 60
         while time.time() < deadline and window.worker.isRunning():
@@ -111,10 +143,10 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         log = window.create_live_log.toPlainText()
         assert window.current_project is not None, log
         assert window.current_project.video_path, log
-        assert "Initializing Human Touch pipeline" in log, log
+        assert "Initializing Reality Mix pipeline" in log, log
         assert "Writing natural retention-first narration" in log, log
         assert "Voice Director" in log, log
-        assert "generating human-directed visuals" in log.lower(), log
+        assert "visual source: AI Generated" in log, log
         assert "speech-paced TikTok Pop captions" in log, log
         assert "Human editor pass" in log, log
         assert "Sound design ready" in log, log
@@ -123,6 +155,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         assert window.current_project.captions_path.endswith("captions.ass")
         assert window.current_project.soundtrack_used
         assert window.current_project.voice_engine_used == "Kokoro Directed"
+        assert window.current_project.image_source_mode == "AI Generated"
         assert len(window.current_project.scenes) >= 3
         window.close()
         '''
