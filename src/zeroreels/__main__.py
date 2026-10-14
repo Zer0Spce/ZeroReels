@@ -7,10 +7,12 @@ from PySide6.QtWidgets import QApplication
 
 from .ui import MainWindow, build_stylesheet
 from .live_setup import install as install_live_setup
+from .model_browse import install as install_model_browse
 
 
 def main() -> int:
     install_live_setup()
+    install_model_browse()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
