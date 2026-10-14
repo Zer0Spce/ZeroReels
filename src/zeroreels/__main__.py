@@ -29,6 +29,7 @@ from .v070_pipeline import install as install_v070_pipeline
 from .v070_render import install as install_v070_render
 from .v070_guardrails import install as install_v070_guardrails
 from .v070_ui import install as install_v070_ui
+from .v070_setup_extra import install as install_v070_setup_extra
 
 
 def main() -> int:
@@ -57,6 +58,7 @@ def main() -> int:
     install_v070_render()
     install_v070_guardrails()
     install_v070_ui()
+    install_v070_setup_extra()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
