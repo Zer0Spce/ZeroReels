@@ -6,55 +6,97 @@
 
 ZeroReels does not require a paid AI API. The production pipeline uses local tools and models on your Windows PC.
 
-## v0.5 — Quality & Continuity
+## v0.5.3 — TikTok Storytelling + Real Live Stages
 
-v0.5 focuses on making the finished reel feel more deliberately written, directed, voiced, and edited instead of like a sequence of unrelated AI slides.
+v0.5.3 focuses on the two things that matter most after the real local pipeline works: **better storytelling** and **clear feedback while the app is working**.
 
-### Cleaner Windows UI
+### Real Create Live Log
 
-- New **black + yellow** visual identity
-- Compact Create dashboard designed for normal Windows laptop/desktop resolutions
-- Cleaner hierarchy, tighter spacing, consistent cards and controls
-- Subtle yellow button hover glow, press feedback, shadows, and active navigation effects
-- **Create Live Generation Log** with timestamps for script, images, reused visuals, voice, captions, rendering, completion, and errors
+The Create log now consumes stage events directly from the background generation worker instead of relying on a generic heartbeat.
 
-### More human narration
+It reports real pipeline work such as:
 
-- Stronger short-form script direction with less filler and fewer generic AI phrases
-- Natural contractions, sentence-length variation, and spoken punctuation
-- A second narration-only line-edit pass improves cadence without being allowed to add new facts
-- Target-length voice pacing gently compensates when the generated script would otherwise run noticeably long or short
-- Punctuation-aware pauses and subtle Kokoro delivery variation reduce metronomic narration
-- Final narration receives light compression and loudness normalization during render
+- initializing and checking the local stack
+- planning the story
+- drafting and polishing narration
+- checking repetition/flow
+- generating each image and confirming when each image is ready
+- generating voice-over
+- building captions
+- rendering motion clips
+- compositing transitions
+- encoding the final MP4
 
-### Better visual continuity
+If one local AI operation takes a long time, ZeroReels keeps an elapsed-time heartbeat for the **current real stage** instead of remaining stuck on `Preparing local pipeline`.
 
-Create now includes three continuity modes:
+### TikTok Story is the new recommended default
 
-- **Consistent Story** — default; keeps recurring people, locations, props, wardrobe, era, and visual language coherent while still allowing natural shot changes
-- **Same Cast & World** — stronger recurring character/world lock using a continuity bible plus a stable generation seed
-- **Independent Shots** — allows fresh subjects per scene while keeping the overall art direction coherent
+Create now includes four additional narration profiles:
 
-ZeroReels also performs a storyboard continuity pass. When two adjacent narration beats are clearly the same exact moment/location, it can **reuse the previous generated image** and change the camera motion/crop instead of unnecessarily inventing a new actor, room, or set.
+- **TikTok Story** — default; conversational hook, escalation, natural spoken rhythm, memorable landing
+- **Viral Explainer** — fast, clear explanation without fake hype
+- **Dark Curiosity** — restrained mystery/curiosity narration
+- **Mini Documentary** — human documentary cadence with stronger factual restraint
 
-Image prompts also explicitly avoid fake readable signs, documents, interfaces, labels, watermarks, and other text-heavy AI artifacts.
+Existing visual styles remain available.
 
-> Local diffusion consistency is best-effort. Same Cast & World improves continuity substantially, but it is not a biometric face-lock system.
+The v0.5.3 script planner uses a retention-oriented structure:
 
-### More natural editing
+1. immediate concrete hook
+2. clear premise
+3. distinct escalating beats
+4. strongest consequence/reveal near the end
+5. clean final line instead of a generic CTA
 
-- Six subtle camera-motion patterns instead of a repeating three-motion loop
-- Light image finishing for a more consistent final sequence
-- Real scene-to-scene FFmpeg transitions instead of fading each still toward black
-- Transition choices:
-  - **Natural Crossfade** — default
-  - **Soft Dissolve**
-  - **Smooth Push**
-  - **Clean Cut**
+The script is then line-edited for contractions, sentence variety, spoken punctuation, pacing, and repetition. Factual topics are instructed not to invent dates, quotes, statistics, studies, or events. Hypothetical topics are written as plausible consequences rather than fake sourced facts.
+
+### Better visual storytelling
+
+Every scene now receives a distinct visual role instead of merely receiving another generic prompt. Across an eight-scene reel ZeroReels deliberately varies beats such as:
+
+- hook image
+- establishing shot
+- medium action
+- meaningful close detail
+- escalation angle
+- largest-impact visual
+- aftermath/context
+- final reflective image
+
+Continuity still preserves recurring cast/world traits, but **every scene generates a fresh image**. ZeroReels does not reuse the exact previous frame for continuity.
+
+- **Consistent Story** — coherent recurring people, locations, props, era, palette, and production design with fresh framing per scene
+- **Same Cast & World** — stronger recurring character/world lock with a deterministic seed family, not one identical seed
+- **Independent Shots** — freer standalone visuals while retaining the selected visual style
+
+Prompts explicitly discourage duplicated subjects, poster-like repetition, fake readable documents, signs, interfaces, labels, logos, watermarks, and subtitles inside generated images.
+
+> Local diffusion identity consistency is best-effort. Same Cast & World improves recurring-character coherence, but it is not a biometric face-lock system.
+
+### Story Rhythm transitions
+
+**Story Rhythm** is the new recommended transition mode. It adapts transition timing to the selected story style:
+
+- TikTok Story / Viral Explainer / Fast Social → quicker, almost-cut crossfades
+- Dark Curiosity / Dark Mystery → softer dissolves
+- Mini Documentary / Cinematic Documentary → restrained natural crossfades
+
+Manual options remain available:
+
+- Natural Crossfade
+- Soft Dissolve
+- Smooth Push
+- Clean Cut
+
+### Repetition and quality guard
+
+Before spending time on FLUX image generation, ZeroReels checks whether scene narration collapsed into duplicates or near-duplicates. It attempts a focused repair pass. If the local model still repeats itself, generation stops early instead of wasting several minutes creating a broken reel.
+
+## v0.5 — Quality & Continuity foundation
+
+The v0.5 series added the black/yellow Windows UI, compact Create dashboard, Create Live Log, phrase-aware captions, lower/smaller caption defaults, six camera-motion patterns, visual continuity modes, humanized Kokoro pacing, light image finishing, audio compression/loudness normalization, and FFmpeg scene-to-scene transitions.
 
 ### Cleaner captions
-
-Captions now break around phrases and punctuation instead of fixed word counts.
 
 Caption position:
 - **Bottom** — default
@@ -66,7 +108,7 @@ Caption size:
 - **Medium**
 - **Large**
 
-The default is intentionally smaller and lower than v0.4 so it obstructs less of the generated scene.
+The default is intentionally small and low so captions cover less of the generated image.
 
 ## v0.4 — Real Local Pipeline
 
@@ -87,19 +129,20 @@ v0.4 moved ZeroReels beyond the v0.3 Mock Mode prototype and connected the full 
 - Test Mode remains available for a fast end-to-end check without AI models
 - Portable Windows build produced by GitHub Actions
 
-## Recommended v0.5 defaults
+## Recommended v0.5.3 defaults
 
-For a typical story/documentary reel:
+For most narration/story reels:
 
+- Style: **TikTok Story**
 - Visual continuity: **Consistent Story**
 - Caption position: **Bottom**
 - Caption size: **Small**
-- Transition style: **Natural Crossfade**
+- Transition style: **Story Rhythm**
 - Natural camera motion: **On**
 - Scene transitions: **On**
 - Burn captions: **On**
 
-For a story that repeatedly shows the same person or fictional character, try **Same Cast & World**.
+For a story that repeatedly shows the same person or fictional character, use **Same Cast & World**.
 
 ## Windows requirements
 
@@ -155,8 +198,6 @@ ZeroReels stores generated projects under:
 `%USERPROFILE%\.zeroreels\projects\`
 
 A project folder contains the generated images, per-scene voice files, combined narration, captions, `project.json`, and `final.mp4`.
-
-When ZeroReels deliberately reuses a visual for adjacent narration beats, those scenes may reference the same generated source image while receiving different edit motion.
 
 ## Privacy and cost
 

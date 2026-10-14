@@ -16,6 +16,9 @@ from .layout_polish import install as install_layout_polish
 from .v051_hotfix import install as install_v051_hotfix
 from .v052_script_base import install as install_v052_script_base
 from .v052_hotfix import install as install_v052_hotfix
+from .v053_quality import install as install_v053_quality
+from .v053_duration import install as install_v053_duration
+from .v053_render import install as install_v053_render
 
 
 def main() -> int:
@@ -27,10 +30,11 @@ def main() -> int:
     install_quality_ui()
     install_layout_polish()
     install_v051_hotfix()
-    # v0.5.2 removes the exact-image reuse planning pass, then installs the
-    # final repetition/continuity/live-feedback guard on top of the stable UI.
     install_v052_script_base()
     install_v052_hotfix()
+    install_v053_quality()
+    install_v053_duration()
+    install_v053_render()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
@@ -39,7 +43,6 @@ def main() -> int:
     app.setStyleSheet(ui.build_stylesheet())
     window = MainWindow()
     if "--smoke-test" in sys.argv:
-        # Used by Windows CI to prove the packaged executable can import and build the real UI.
         window.close()
         return 0
     window.show()
