@@ -4,9 +4,10 @@ from pathlib import Path
 
 from PySide6.QtGui import QColor, QImage
 
+from zeroreels import quality_services, v060_guardrails, v060_render
 from zeroreels.config import Settings
 from zeroreels.models import Project, Scene
-from zeroreels.services import CaptionService, FFmpegRenderer
+from zeroreels.services import CaptionService, FFmpegRenderer, MockImageService, MockVoiceService
 from zeroreels.v060_render import _story_transition_plan, professional_captions
 from zeroreels.v060_story import quality_retry_prompt, scene_quality_report
 
@@ -64,3 +65,38 @@ def test_story_rhythm_is_mostly_clean_cuts():
     cuts = sum(1 for kind, _duration, _label in plan if kind == "cut")
     assert len(plan) == 7
     assert cuts >= 5
+
+
+def test_mixed_cut_and_crossfade_render_executes(tmp_path: Path, monkeypatch):
+    project = Project(topic="Edit test", style="TikTok Story", target_seconds=4, format="1:1")
+    project.scenes = [
+        Scene(i + 1, f"Distinct narration beat number {i + 1}.", f"visual {i}", duration=1.0, shot_role=("Hook", "Establishing", "Detail", "Landing")[i])
+        for i in range(4)
+    ]
+    image_service = MockImageService()
+    for scene in project.scenes:
+        scene.image_path = str(image_service.generate(scene, tmp_path, project.format))
+    audio = MockVoiceService().generate(project, tmp_path)
+
+    monkeypatch.setattr(FFmpegRenderer, "_render_scene_clips", v060_render.professional_render_scene_clips)
+    monkeypatch.setattr(FFmpegRenderer, "_combine_filter", v060_guardrails._combine_filter_cfr)
+    monkeypatch.setattr(FFmpegRenderer, "_caption_filter", v060_render.professional_caption_filter)
+    monkeypatch.setattr(FFmpegRenderer, "render", quality_services._render)
+
+    renderer = FFmpegRenderer(Settings())
+    video, burned = renderer.render(
+        project,
+        audio,
+        None,
+        tmp_path,
+        motion=True,
+        transitions=True,
+        caption_position="Bottom",
+        caption_size="Small",
+        transition_style="Story Rhythm",
+    )
+    assert video.exists()
+    assert video.stat().st_size > 10_000
+    assert burned is False
+    assert any(scene.transition_to_next != "Clean Cut" for scene in project.scenes[:-1])
+    assert any(scene.transition_to_next == "Clean Cut" for scene in project.scenes[:-1])
