@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+dist/
+build/
+
+# ZeroReels local data
+projects/
+outputs/
+models/
+checkpoints/
+voices/
+cache/
+*.mp4
+*.wav
+*.srt
+*.ppm
+settings.local.json
+
+# ComfyUI / local AI
+ComfyUI/
+ollama-data/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
