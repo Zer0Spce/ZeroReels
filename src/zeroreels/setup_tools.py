@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import urllib.request
 
-from .config import Settings, detect_comfy_root, find_executable
+from .config import Settings, detect_comfy_root, find_executable, is_comfy_program_install_root
 
 Progress = Callable[[int, str], None]
 Log = Callable[[str], None]
@@ -38,6 +38,12 @@ FLUX_MODELS = (
 def _emit(log: Log | None, text: str) -> None:
     if log and text:
         log(text.rstrip())
+
+
+def _same_path(a: Path, b: Path) -> bool:
+    aa = str(a.resolve(strict=False))
+    bb = str(b.resolve(strict=False))
+    return aa.lower() == bb.lower() if os.name == "nt" else aa == bb
 
 
 def _run(cmd: list[str], timeout: int | None = None) -> str:
@@ -150,19 +156,31 @@ def download_kokoro_models(settings: Settings, progress: Progress | None = None,
     _emit(log, "Kokoro voice files are ready.")
 
 
-def resolve_comfy_root(settings: Settings) -> Path:
-    if settings.comfy_root:
-        root = Path(settings.comfy_root).expanduser()
-        if root.exists():
-            return root
+def resolve_comfy_root(settings: Settings, log: Log | None = None) -> Path:
     detected = detect_comfy_root()
+    saved = Path(settings.comfy_root).expanduser() if settings.comfy_root else None
+
+    # ComfyUI Desktop's own configured basePath is authoritative. This also repairs
+    # older ZeroReels versions that accidentally saved the application install folder.
     if detected:
+        if saved and not _same_path(saved, detected):
+            _emit(log, f"Correcting ComfyUI data folder: {saved} -> {detected}")
         settings.comfy_root = str(detected)
         settings.save()
         return detected
+
+    if saved and saved.exists() and not is_comfy_program_install_root(saved):
+        return saved
+
+    if saved and is_comfy_program_install_root(saved):
+        raise RuntimeError(
+            "The selected ComfyUI folder is the application install folder, not the model/data folder. "
+            "Open ComfyUI Desktop once, finish its first-time setup, then click Detect / Select Data Folder again."
+        )
+
     raise RuntimeError(
         "ZeroReels could not find the ComfyUI data folder. Open ComfyUI Desktop once, "
-        "then use Select ComfyUI Folder in ZeroReels Setup."
+        "finish its first-time setup, then use Detect / Select Data Folder in ZeroReels Setup."
     )
 
 
@@ -211,15 +229,38 @@ def _download(
         raise
 
 
+def _migrate_existing_flux_models(old_root: Path | None, new_root: Path, log: Log | None = None) -> None:
+    if not old_root or not old_root.exists() or _same_path(old_root, new_root):
+        return
+    for label, _url, relative in FLUX_MODELS:
+        source = old_root / relative
+        target = new_root / relative
+        if not source.exists() or target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _emit(log, f"Moving existing {label} into active ComfyUI model folder...")
+        _emit(log, f"From: {source}")
+        _emit(log, f"To:   {target}")
+        shutil.move(str(source), str(target))
+        _emit(log, f"Moved: {target.name}")
+
+
 def download_flux_models(settings: Settings, progress: Progress | None = None, log: Log | None = None) -> Path:
-    root = resolve_comfy_root(settings)
+    old_root = Path(settings.comfy_root).expanduser() if settings.comfy_root else None
+    root = resolve_comfy_root(settings, log=log)
     _emit(log, f"Using ComfyUI data folder: {root}")
+
+    # Avoid making the user download ~15 GB again when an older ZeroReels version
+    # wrote the model pack into the ComfyUI application directory by mistake.
+    _migrate_existing_flux_models(old_root, root, log=log)
+
     spans = [(4, 32), (34, 91), (92, 99)]
     for (label, url, relative), (start, end) in zip(FLUX_MODELS, spans):
         _download(url, root / relative, progress, start, end, label, log=log)
     if progress:
         progress(100, "FLUX.2 Klein model pack is ready. Restart ComfyUI if it is already open.")
-    _emit(log, "FLUX.2 Klein model pack is ready. Restart ComfyUI if it is already open.")
+    _emit(log, "FLUX.2 Klein model pack is ready in ComfyUI's active model folder.")
+    _emit(log, "Restart ComfyUI Desktop, then click Run Checks in ZeroReels Diagnostics.")
     return root
 
 
