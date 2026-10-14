@@ -29,6 +29,10 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         from zeroreels.v053_quality import install as install_v053_quality
         from zeroreels.v053_duration import install as install_v053_duration
         from zeroreels.v053_render import install as install_v053_render
+        from zeroreels.v060_pipeline import install as install_v060_pipeline
+        from zeroreels.v060_render import install as install_v060_render
+        from zeroreels.v060_guardrails import install as install_v060_guardrails
+        from zeroreels.v060_ui import install as install_v060_ui
 
         install_live_setup()
         install_model_browse()
@@ -43,6 +47,10 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         install_v053_quality()
         install_v053_duration()
         install_v053_render()
+        install_v060_pipeline()
+        install_v060_render()
+        install_v060_guardrails()
+        install_v060_ui()
 
         app = QApplication([])
         app.setStyle("Fusion")
@@ -57,6 +65,11 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
 
         assert window.style_box.currentText() == "TikTok Story"
         assert window.transition_style_box.currentText() == "Story Rhythm"
+        assert window.caption_style_box.currentText() == "TikTok Pop"
+        assert window.soundtrack_box.currentText() == "Auto Ambience"
+        assert window.quality_guard_check.isChecked()
+        assert window.sfx_check.isChecked()
+        assert window.continuity_box.findText("Hero Character Lock") >= 0
 
         window.generate.click()
         app.processEvents()
@@ -65,14 +78,15 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         initial_log = window.create_live_log.toPlainText()
         assert "Starting a new ZeroReels generation" in initial_log
         assert "Live stage tracking connected" in initial_log
+        assert "Professional polish:" in initial_log
 
-        deadline = time.time() + 30
+        deadline = time.time() + 40
         while time.time() < deadline and window.worker.isRunning():
             app.processEvents()
             time.sleep(0.02)
 
         assert not window.worker.isRunning(), "Mock generation thread did not finish in time"
-        for _ in range(50):
+        for _ in range(80):
             app.processEvents()
             if window.current_project and window.current_project.video_path:
                 break
@@ -81,13 +95,16 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         log = window.create_live_log.toPlainText()
         assert window.current_project is not None, log
         assert window.current_project.video_path, log
-        assert "Initializing local pipeline" in log, log
-        assert "Writing short-form narration" in log, log
-        assert "Generating image 1 of 3" in log, log
-        assert "Building phrase-timed captions" in log, log
+        assert "Initializing professional local pipeline" in log, log
+        assert "Writing retention-first narration" in log, log
+        assert "Generating scene 1/3" in log, log
+        assert "Building TikTok Pop captions" in log, log
         assert "Starting final edit" in log, log
+        assert "Mixing soundtrack, ducking and subtle SFX" in log, log
         assert "Video ready" in log, log
         assert "Preparing local pipeline • elapsed" not in log, log
+        assert window.current_project.captions_path.endswith("captions.ass")
+        assert window.current_project.soundtrack_used
         window.close()
         '''
     )
@@ -97,7 +114,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         [sys.executable, "-c", script],
         text=True,
         capture_output=True,
-        timeout=45,
+        timeout=55,
         env=env,
     )
     assert proc.returncode == 0, proc.stdout + "\n" + proc.stderr
