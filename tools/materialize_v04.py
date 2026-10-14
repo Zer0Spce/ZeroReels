@@ -3,11 +3,13 @@ from __future__ import annotations
 import base64
 import io
 from pathlib import Path
+import subprocess
 import tarfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ROOT / "tools"
+WORKFLOWS = ROOT / ".github" / "workflows"
 
 
 def main() -> None:
@@ -25,14 +27,23 @@ def main() -> None:
                 raise SystemExit(f"Unsafe archive path: {member.name}")
         archive.extractall(ROOT)
 
+    # A workflow token may write ordinary repository files but cannot create or
+    # modify workflow YAML without the workflows permission. Keep workflow files
+    # unchanged in this bot commit; ChatGPT's authenticated repo connector writes
+    # the final workflow YAML immediately afterwards.
+    subprocess.run(
+        ["git", "checkout", "HEAD", "--", ".github/workflows/windows-check.yml", ".github/workflows/materialize-v04.yml"],
+        cwd=ROOT,
+        check=True,
+    )
+    generated_build_workflow = WORKFLOWS / "windows-build.yml"
+    if generated_build_workflow.exists():
+        generated_build_workflow.unlink()
+
     for part in parts:
         part.unlink()
 
-    for path in [
-        TOOLS / ".v04_ready",
-        TOOLS / "materialize_v04.py",
-        ROOT / ".github" / "workflows" / "materialize-v04.yml",
-    ]:
+    for path in [TOOLS / ".v04_ready", TOOLS / "materialize_v04.py"]:
         if path.exists():
             path.unlink()
 
