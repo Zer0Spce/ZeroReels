@@ -27,6 +27,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         from zeroreels.v052_script_base import install as install_v052_script_base
         from zeroreels.v052_hotfix import install as install_v052_hotfix
         from zeroreels.v053_quality import install as install_v053_quality
+        from zeroreels.v053_duration import install as install_v053_duration
         from zeroreels.v053_render import install as install_v053_render
 
         install_live_setup()
@@ -40,6 +41,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         install_v052_script_base()
         install_v052_hotfix()
         install_v053_quality()
+        install_v053_duration()
         install_v053_render()
 
         app = QApplication([])
@@ -85,6 +87,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         assert "Building phrase-timed captions" in log, log
         assert "Starting final edit" in log, log
         assert "Video ready" in log, log
+        assert "Preparing local pipeline • elapsed" not in log, log
         window.close()
         '''
     )
