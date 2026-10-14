@@ -26,6 +26,8 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         from zeroreels.v051_hotfix import install as install_v051_hotfix
         from zeroreels.v052_script_base import install as install_v052_script_base
         from zeroreels.v052_hotfix import install as install_v052_hotfix
+        from zeroreels.v053_quality import install as install_v053_quality
+        from zeroreels.v053_render import install as install_v053_render
 
         install_live_setup()
         install_model_browse()
@@ -37,6 +39,8 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         install_v051_hotfix()
         install_v052_script_base()
         install_v052_hotfix()
+        install_v053_quality()
+        install_v053_render()
 
         app = QApplication([])
         app.setStyle("Fusion")
@@ -49,16 +53,24 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         window.seconds.setValue(6)
         window.scene_count.setValue(3)
 
+        assert window.style_box.currentText() == "TikTok Story"
+        assert window.transition_style_box.currentText() == "Story Rhythm"
+
         window.generate.click()
         app.processEvents()
 
         assert window.worker is not None, "Generate button did not create a pipeline worker"
         initial_log = window.create_live_log.toPlainText()
         assert "Starting a new ZeroReels generation" in initial_log
-        assert "Pipeline worker started" in initial_log
+        assert "Live stage tracking connected" in initial_log
 
-        assert window.worker.wait(30000), "Mock generation thread did not finish in time"
-        for _ in range(30):
+        deadline = time.time() + 30
+        while time.time() < deadline and window.worker.isRunning():
+            app.processEvents()
+            time.sleep(0.02)
+
+        assert not window.worker.isRunning(), "Mock generation thread did not finish in time"
+        for _ in range(50):
             app.processEvents()
             if window.current_project and window.current_project.video_path:
                 break
@@ -67,6 +79,11 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         log = window.create_live_log.toPlainText()
         assert window.current_project is not None, log
         assert window.current_project.video_path, log
+        assert "Initializing local pipeline" in log, log
+        assert "Writing short-form narration" in log, log
+        assert "Generating image 1 of 3" in log, log
+        assert "Building phrase-timed captions" in log, log
+        assert "Starting final edit" in log, log
         assert "Video ready" in log, log
         window.close()
         '''
