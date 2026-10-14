@@ -16,6 +16,7 @@ class Scene:
     image_path: str = ""
     audio_path: str = ""
     status: str = "pending"
+    reuse_previous_image: bool = False
 
 
 @dataclass(slots=True)
