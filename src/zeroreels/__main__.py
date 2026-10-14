@@ -17,6 +17,7 @@ from .v051_hotfix import install as install_v051_hotfix
 from .v052_script_base import install as install_v052_script_base
 from .v052_hotfix import install as install_v052_hotfix
 from .v053_quality import install as install_v053_quality
+from .v053_duration import install as install_v053_duration
 from .v053_render import install as install_v053_render
 
 
@@ -32,7 +33,7 @@ def main() -> int:
     install_v052_script_base()
     install_v052_hotfix()
     install_v053_quality()
-    # Final render/UI defaults depend on the v0.5.3 story profile layer.
+    install_v053_duration()
     install_v053_render()
 
     app = QApplication(sys.argv)
