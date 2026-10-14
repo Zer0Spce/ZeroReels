@@ -65,28 +65,91 @@ def find_executable(configured: str, name: str) -> str | None:
     return shutil.which(name)
 
 
-def detect_comfy_root() -> Path | None:
-    candidates: list[Path] = []
+def _expanded_path(value: str) -> Path:
+    return Path(os.path.expandvars(value)).expanduser()
+
+
+def _comfy_desktop_config_roots() -> list[Path]:
+    """Return roots explicitly configured by ComfyUI Desktop, highest priority first."""
     home = Path.home()
-    candidates += [
+    appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
+    config_dir = appdata / "ComfyUI"
+    roots: list[Path] = []
+
+    config_file = config_dir / "config.json"
+    if config_file.exists():
+        try:
+            data = json.loads(config_file.read_text(encoding="utf-8"))
+            # Desktop versions have used several names; basePath is the canonical one.
+            for key in ("basePath", "base_path", "modelBasePath", "sharedModelsPath"):
+                value = data.get(key)
+                if isinstance(value, str) and value.strip():
+                    roots.append(_expanded_path(value.strip()))
+        except Exception:
+            pass
+
+    # Some Desktop versions also persist the selected model root in YAML.
+    for yaml_name in ("extra_models_config.yaml", "extra_model_paths.yaml"):
+        yaml_file = config_dir / yaml_name
+        if not yaml_file.exists():
+            continue
+        try:
+            for raw in yaml_file.read_text(encoding="utf-8", errors="replace").splitlines():
+                line = raw.strip()
+                if not line or line.startswith("#") or ":" not in line:
+                    continue
+                key, value = line.split(":", 1)
+                if key.strip() in {"base_path", "basePath"}:
+                    cleaned = value.strip().strip("'\"")
+                    if cleaned:
+                        roots.append(_expanded_path(cleaned))
+        except Exception:
+            pass
+
+    # Preserve order while removing duplicates (case-insensitive on Windows).
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        key = str(root.resolve(strict=False)).lower() if os.name == "nt" else str(root.resolve(strict=False))
+        if key not in seen:
+            seen.add(key)
+            unique.append(root)
+    return unique
+
+
+def is_comfy_program_install_root(path: str | Path) -> bool:
+    """True when a path is the Desktop application install directory, not its user data root."""
+    try:
+        root = Path(path).expanduser().resolve(strict=False)
+        localappdata = Path(os.environ.get("LOCALAPPDATA", "")).resolve(strict=False)
+        programs = localappdata / "Programs"
+        root_text = str(root).lower()
+        programs_text = str(programs).lower()
+        return root_text.startswith(programs_text + os.sep.lower()) and "comfy" in root.name.lower()
+    except Exception:
+        return False
+
+
+def detect_comfy_root() -> Path | None:
+    """Detect the data/model root ComfyUI Desktop actually scans.
+
+    ComfyUI Desktop stores the selected data directory in %APPDATA%/ComfyUI/config.json.
+    That configured path must win over the application's installation directory.
+    """
+    home = Path.home()
+
+    # First use ComfyUI Desktop's own authoritative configuration.
+    for candidate in _comfy_desktop_config_roots():
+        if (candidate / "models").exists():
+            return candidate
+
+    # Fallbacks for portable/manual installs.
+    candidates = [
         home / "ComfyUI-Shared",
         home / "Documents" / "ComfyUI",
         home / "ComfyUI",
     ]
-
-    appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
-    config_file = appdata / "ComfyUI" / "config.json"
-    if config_file.exists():
-        try:
-            data = json.loads(config_file.read_text(encoding="utf-8"))
-            for key in ("basePath", "base_path", "modelBasePath", "sharedModelsPath"):
-                value = data.get(key)
-                if value:
-                    candidates.insert(0, Path(value).expanduser())
-        except Exception:
-            pass
-
     for candidate in candidates:
-        if (candidate / "models").exists():
+        if (candidate / "models").exists() and not is_comfy_program_install_root(candidate):
             return candidate
     return None
