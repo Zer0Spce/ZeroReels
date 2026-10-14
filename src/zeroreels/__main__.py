@@ -13,6 +13,7 @@ from .renderer_fix import install as install_renderer_fix
 from .quality_orchestration import install as install_quality_orchestration
 from .quality_ui import install as install_quality_ui
 from .layout_polish import install as install_layout_polish
+from .v051_hotfix import install as install_v051_hotfix
 
 
 def main() -> int:
@@ -23,6 +24,8 @@ def main() -> int:
     install_quality_orchestration()
     install_quality_ui()
     install_layout_polish()
+    # Keep this last: it normalizes the final widget tree after the v0.5 quality layers.
+    install_v051_hotfix()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
