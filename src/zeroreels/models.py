@@ -102,4 +102,4 @@ class GenerationOptions:
     ocr_guard: bool = True
     dynamic_visual_pacing: bool = True
     image_source_mode: str = "AI Generated"
-    research_grounding: bool = True
+    research_grounding: bool = False
