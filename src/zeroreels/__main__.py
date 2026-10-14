@@ -17,6 +17,7 @@ from .v051_hotfix import install as install_v051_hotfix
 from .v052_script_base import install as install_v052_script_base
 from .v052_hotfix import install as install_v052_hotfix
 from .v053_quality import install as install_v053_quality
+from .v053_render import install as install_v053_render
 
 
 def main() -> int:
@@ -30,9 +31,9 @@ def main() -> int:
     install_v051_hotfix()
     install_v052_script_base()
     install_v052_hotfix()
-    # Keep v0.5.3 last: it owns the final narration style, live-stage transport,
-    # defaults, and visual-storytelling behavior.
     install_v053_quality()
+    # Final render/UI defaults depend on the v0.5.3 story profile layer.
+    install_v053_render()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
