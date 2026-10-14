@@ -23,6 +23,7 @@ from .v060_pipeline import install as install_v060_pipeline
 from .v060_render import install as install_v060_render
 from .v060_guardrails import install as install_v060_guardrails
 from .v060_ui import install as install_v060_ui
+from .v060_labels import install as install_v060_labels
 
 
 def main() -> int:
@@ -45,6 +46,7 @@ def main() -> int:
     install_v060_render()
     install_v060_guardrails()
     install_v060_ui()
+    install_v060_labels()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
