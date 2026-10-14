@@ -19,6 +19,9 @@ from .v052_hotfix import install as install_v052_hotfix
 from .v053_quality import install as install_v053_quality
 from .v053_duration import install as install_v053_duration
 from .v053_render import install as install_v053_render
+from .v060_pipeline import install as install_v060_pipeline
+from .v060_render import install as install_v060_render
+from .v060_ui import install as install_v060_ui
 
 
 def main() -> int:
@@ -35,6 +38,11 @@ def main() -> int:
     install_v053_quality()
     install_v053_duration()
     install_v053_render()
+    # v0.6 is deliberately last: it owns the final professional story,
+    # scene-quality, captions, editing/audio and Create/Scenes UX behavior.
+    install_v060_pipeline()
+    install_v060_render()
+    install_v060_ui()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
