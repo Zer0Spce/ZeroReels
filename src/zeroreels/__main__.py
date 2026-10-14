@@ -25,6 +25,9 @@ from .v060_guardrails import install as install_v060_guardrails
 from .v060_prompt_safe import install as install_v060_prompt_safe
 from .v060_ui import install as install_v060_ui
 from .v060_labels import install as install_v060_labels
+from .v070_pipeline import install as install_v070_pipeline
+from .v070_render import install as install_v070_render
+from .v070_ui import install as install_v070_ui
 
 
 def main() -> int:
@@ -41,14 +44,17 @@ def main() -> int:
     install_v053_quality()
     install_v053_duration()
     install_v053_render()
-    # v0.6 is deliberately last: it owns the final professional story,
-    # scene-quality, captions, editing/audio and Create/Scenes UX behavior.
     install_v060_pipeline()
     install_v060_render()
     install_v060_guardrails()
     install_v060_prompt_safe()
     install_v060_ui()
     install_v060_labels()
+    # v0.7 owns the final runtime-locked voice pass, Visual QA v2, speech-paced
+    # captions, semantic soundscape and Human Touch Create/Setup controls.
+    install_v070_pipeline()
+    install_v070_render()
+    install_v070_ui()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
