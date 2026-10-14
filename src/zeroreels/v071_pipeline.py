@@ -7,8 +7,9 @@ import time
 from . import pipeline, services
 from .config import PROJECTS_DIR
 from .models import GenerationOptions, Project
-from .v070_voice import rewrite_for_measured_duration, voice_service_for
+from .v070_voice import voice_service_for
 from .v070_visual import quality_retry_prompt_v2, visual_qa_v2
+from .v071_runtime import rewrite_for_measured_duration_v2
 from .v071_web_media import (
     WikimediaImageService,
     fetch_wikipedia_context,
@@ -154,26 +155,38 @@ def reality_mix_run(self, project: Project, options: GenerationOptions, progress
     probe_dir = out_dir / "_runtime_probe"
     probe_dir.mkdir(parents=True, exist_ok=True)
     progress(16, f"Voice Director • {options.voice_engine} • {options.voice_delivery}")
-    probe_audio = voice.generate(project, probe_dir, progress=progress)
+    candidate_audio = voice.generate(project, probe_dir, progress=progress)
     measured = float(project.actual_seconds or sum(max(0.0, scene.duration) for scene in project.scenes))
     if options.mock_mode:
         measured = float(project.target_seconds)
         project.actual_seconds = measured
 
-    rewritten = False
     if options.runtime_lock and not options.mock_mode:
-        rewritten = rewrite_for_measured_duration(self.settings, project, measured, progress)
-    if rewritten:
-        progress(33, "Re-performing final narration after measured runtime edit")
-        voice = voice_service_for(self.settings, options.voice_engine, options.voice_delivery, False)
-        audio = voice.generate(project, out_dir, progress=progress)
+        # Re-measure after every rewrite. v0.7 stopped after one rewrite even when the new
+        # narration still missed badly (for example a 60s request landing around 40s).
+        for pass_index in (1, 2):
+            ratio = float(project.target_seconds) / max(0.001, measured)
+            if 0.95 <= ratio <= 1.05:
+                break
+            changed = rewrite_for_measured_duration_v2(
+                self.settings, project, measured, progress=progress, pass_index=pass_index
+            )
+            if not changed:
+                break
+            voice = voice_service_for(self.settings, options.voice_engine, options.voice_delivery, False)
+            candidate_audio = voice.generate(project, probe_dir, progress=progress)
+            measured = float(project.actual_seconds or sum(max(0.0, scene.duration) for scene in project.scenes))
+
+    audio = out_dir / "narration.wav"
+    shutil.copy2(candidate_audio, audio)
+    project.actual_seconds = round(measured, 2)
+    drift = abs(measured - float(project.target_seconds))
+    if options.runtime_lock and not options.mock_mode and drift > max(3.0, project.target_seconds * 0.07):
+        progress(33, f"Runtime Lock v2 warning • {measured:.1f}s actual / {project.target_seconds}s target")
     else:
-        audio = out_dir / "narration.wav"
-        shutil.copy2(probe_audio, audio)
-        progress(33, f"Runtime locked • {project.actual_seconds:.1f}s actual / {project.target_seconds}s target")
+        progress(33, f"Runtime Lock v2 ready • {measured:.1f}s actual / {project.target_seconds}s target")
     shutil.rmtree(probe_dir, ignore_errors=True)
     project.narration_path = str(audio)
-    project.actual_seconds = round(sum(max(0.0, scene.duration) for scene in project.scenes), 2)
     project.voice_engine_used = project.voice_engine_used or options.voice_engine
     project.voice_delivery = project.voice_delivery or options.voice_delivery
     project.save(out_dir / "project.json")
@@ -205,7 +218,12 @@ def reality_mix_run(self, project: Project, options: GenerationOptions, progress
                 project.save(out_dir / "project.json")
                 continue
             except Exception as exc:
-                progress(start_pct, f"Scene {i + 1}/{count} • web image unavailable • falling back to AI ({str(exc)[:90]})")
+                if options.image_source_mode == "Real Web Images":
+                    raise RuntimeError(
+                        f"Real Web Images could not find/download a usable scene {i + 1} image. "
+                        "Try a broader topic or switch Image Source to Hybrid.\n" + str(exc)
+                    ) from exc
+                progress(start_pct, f"Scene {i + 1}/{count} • web image unavailable • using AI fallback ({str(exc)[:90]})")
 
         scene.source_type = "AI Generated"
         scene.source_url = ""
