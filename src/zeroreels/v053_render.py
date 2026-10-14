@@ -5,6 +5,7 @@ from . import services, ui
 
 def install() -> None:
     original_create_page = ui.MainWindow._create_page
+    original_generate = ui.MainWindow._generate
     original_transition_config = services.FFmpegRenderer._transition_config
     original_render_scene_clips = services.FFmpegRenderer._render_scene_clips
     original_combine_filter = services.FFmpegRenderer._combine_filter
@@ -21,6 +22,15 @@ def install() -> None:
                 "Story Rhythm adapts transition speed to the selected storytelling style: faster for TikTok/social, softer for mystery/documentary."
             )
         return page
+
+    def generate(self):
+        result = original_generate(self)
+        # v0.5.2 used a generic heartbeat timer. v0.5.3 has an authoritative
+        # worker-event queue, so stop the old timer to prevent fake/stale log lines.
+        legacy = getattr(self, "_generation_heartbeat_timer", None)
+        if legacy:
+            legacy.stop()
+        return result
 
     def transition_config(self, transitions: bool):
         if not transitions:
@@ -86,6 +96,7 @@ def install() -> None:
         return result
 
     ui.MainWindow._create_page = create_page
+    ui.MainWindow._generate = generate
     services.FFmpegRenderer._transition_config = transition_config
     services.FFmpegRenderer._render_scene_clips = render_scene_clips
     services.FFmpegRenderer._combine_filter = combine_filter
