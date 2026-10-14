@@ -6,9 +6,13 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from .ui import MainWindow, build_stylesheet
+from .live_setup import install as install_live_setup
 
 
 def main() -> int:
+    # Patch only the Setup page/worker so installer output streams into the UI.
+    install_live_setup()
+
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
     app.setOrganizationName("ZeroReels")
