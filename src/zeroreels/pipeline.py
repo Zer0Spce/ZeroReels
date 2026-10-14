@@ -51,7 +51,7 @@ class Pipeline:
         out_dir.mkdir(parents=True, exist_ok=True)
         project.output_dir = str(out_dir)
 
-        progress(6, "Writing script and planning scenes")
+        progress(6, "Writing and polishing narration")
         script_service = MockScriptService() if options.mock_mode else ScriptService(self.settings)
         project.script, project.scenes = script_service.generate(project, options.scene_count)
         if not project.title or project.title == "Untitled Reel":
@@ -62,13 +62,26 @@ class Pipeline:
         count = len(project.scenes)
         for i, scene in enumerate(project.scenes):
             pct = 14 + int(45 * (i / max(1, count)))
-            progress(pct, f"Generating image {i + 1} of {count}")
-            image = image_service.generate(scene, out_dir, project.format)
-            scene.image_path = str(image)
-            scene.status = "image-ready"
+            previous = project.scenes[i - 1] if i > 0 else None
+            can_reuse = bool(
+                i > 0
+                and scene.reuse_previous_image
+                and previous
+                and previous.image_path
+                and Path(previous.image_path).exists()
+            )
+            if can_reuse:
+                progress(pct, f"Reusing visual for scene {i + 1} of {count}")
+                scene.image_path = previous.image_path
+                scene.status = "visual-reused"
+            else:
+                progress(pct, f"Generating image {i + 1} of {count}")
+                image = image_service.generate(scene, out_dir, project.format)
+                scene.image_path = str(image)
+                scene.status = "image-ready"
             project.save(out_dir / "project.json")
 
-        progress(62, "Generating voice-over")
+        progress(62, "Generating humanized voice-over")
         voice_service = MockVoiceService() if options.mock_mode else KokoroVoiceService(self.settings)
         audio = voice_service.generate(project, out_dir, progress=progress)
         project.narration_path = str(audio)
@@ -76,11 +89,11 @@ class Pipeline:
 
         captions = None
         if options.captions:
-            progress(76, "Creating timed captions")
+            progress(76, "Creating phrase-timed captions")
             captions = CaptionService().generate_from_scenes(project, out_dir)
             project.captions_path = str(captions)
 
-        progress(84, "Rendering final video")
+        progress(84, "Rendering natural motion and transitions")
         video, burned = FFmpegRenderer(self.settings).render(
             project,
             audio,
@@ -88,6 +101,9 @@ class Pipeline:
             out_dir,
             motion=options.motion,
             transitions=options.transitions,
+            caption_position=options.caption_position,
+            caption_size=options.caption_size,
+            transition_style=options.transition_style,
         )
         project.video_path = str(video)
         project.captions_burned = burned

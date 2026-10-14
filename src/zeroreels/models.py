@@ -16,6 +16,7 @@ class Scene:
     image_path: str = ""
     audio_path: str = ""
     status: str = "pending"
+    reuse_previous_image: bool = False
 
 
 @dataclass(slots=True)
@@ -26,6 +27,7 @@ class Project:
     style: str = "Cinematic Documentary"
     voice: str = "Default"
     target_seconds: int = 60
+    continuity_mode: str = "Consistent Story"
     script: str = ""
     scenes: list[Scene] = field(default_factory=list)
     created_at: float = field(default_factory=time.time)
@@ -60,3 +62,6 @@ class GenerationOptions:
     motion: bool = True
     transitions: bool = True
     scene_count: int = 8
+    caption_position: str = "Bottom"
+    caption_size: str = "Small"
+    transition_style: str = "Natural Crossfade"

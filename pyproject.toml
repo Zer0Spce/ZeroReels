@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zeroreels"
-version = "0.4.0"
+version = "0.5.0"
 description = "Free local-first AI short-form video automation for Windows"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"

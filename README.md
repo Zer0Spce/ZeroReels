@@ -6,19 +6,79 @@
 
 ZeroReels does not require a paid AI API. The production pipeline uses local tools and models on your Windows PC.
 
+## v0.5 — Quality & Continuity
+
+v0.5 focuses on making the finished reel feel more deliberately written, directed, voiced, and edited instead of like a sequence of unrelated AI slides.
+
+### Cleaner Windows UI
+
+- New **black + yellow** visual identity
+- Compact Create dashboard designed for normal Windows laptop/desktop resolutions
+- Cleaner hierarchy, tighter spacing, consistent cards and controls
+- Subtle yellow button hover glow, press feedback, shadows, and active navigation effects
+- **Create Live Generation Log** with timestamps for script, images, reused visuals, voice, captions, rendering, completion, and errors
+
+### More human narration
+
+- Stronger short-form script direction with less filler and fewer generic AI phrases
+- Natural contractions, sentence-length variation, and spoken punctuation
+- A second narration-only line-edit pass improves cadence without being allowed to add new facts
+- Target-length voice pacing gently compensates when the generated script would otherwise run noticeably long or short
+- Punctuation-aware pauses and subtle Kokoro delivery variation reduce metronomic narration
+- Final narration receives light compression and loudness normalization during render
+
+### Better visual continuity
+
+Create now includes three continuity modes:
+
+- **Consistent Story** — default; keeps recurring people, locations, props, wardrobe, era, and visual language coherent while still allowing natural shot changes
+- **Same Cast & World** — stronger recurring character/world lock using a continuity bible plus a stable generation seed
+- **Independent Shots** — allows fresh subjects per scene while keeping the overall art direction coherent
+
+ZeroReels also performs a storyboard continuity pass. When two adjacent narration beats are clearly the same exact moment/location, it can **reuse the previous generated image** and change the camera motion/crop instead of unnecessarily inventing a new actor, room, or set.
+
+Image prompts also explicitly avoid fake readable signs, documents, interfaces, labels, watermarks, and other text-heavy AI artifacts.
+
+> Local diffusion consistency is best-effort. Same Cast & World improves continuity substantially, but it is not a biometric face-lock system.
+
+### More natural editing
+
+- Six subtle camera-motion patterns instead of a repeating three-motion loop
+- Light image finishing for a more consistent final sequence
+- Real scene-to-scene FFmpeg transitions instead of fading each still toward black
+- Transition choices:
+  - **Natural Crossfade** — default
+  - **Soft Dissolve**
+  - **Smooth Push**
+  - **Clean Cut**
+
+### Cleaner captions
+
+Captions now break around phrases and punctuation instead of fixed word counts.
+
+Caption position:
+- **Bottom** — default
+- **Safe Lower**
+- **Center-Lower**
+
+Caption size:
+- **Small** — default
+- **Medium**
+- **Large**
+
+The default is intentionally smaller and lower than v0.4 so it obstructs less of the generated scene.
+
 ## v0.4 — Real Local Pipeline
 
-v0.4 moves ZeroReels beyond the v0.3 Mock Mode prototype and connects the full local generation pipeline:
+v0.4 moved ZeroReels beyond the v0.3 Mock Mode prototype and connected the full local generation pipeline:
 
 - **Ollama + Qwen3 4B** for scripts and scene planning
 - **ComfyUI Desktop + FLUX.2 Klein 4B** for local image generation
 - **Kokoro-ONNX** for local voice-over with multiple narrator voices
-- **FFmpeg** for motion, fades, captions, audio muxing, and H.264 MP4 export
+- **FFmpeg** for motion, transitions, captions, audio processing, and H.264 MP4 export
 - Actual voice duration drives scene timing and caption timing
 - Built-in ComfyUI API workflow — no workflow JSON file to configure
 - 9:16, 16:9, and 1:1 video output
-- Cinematic slow zoom/pan motion presets
-- Soft scene fade effects
 - Burned subtitles when the FFmpeg build supports libass; `.srt` is retained as a fallback
 - Project files and intermediate assets saved locally for inspection
 - Windows-first Setup and Diagnostics pages
@@ -26,6 +86,20 @@ v0.4 moves ZeroReels beyond the v0.3 Mock Mode prototype and connects the full l
 - One-click local model/voice downloads
 - Test Mode remains available for a fast end-to-end check without AI models
 - Portable Windows build produced by GitHub Actions
+
+## Recommended v0.5 defaults
+
+For a typical story/documentary reel:
+
+- Visual continuity: **Consistent Story**
+- Caption position: **Bottom**
+- Caption size: **Small**
+- Transition style: **Natural Crossfade**
+- Natural camera motion: **On**
+- Scene transitions: **On**
+- Burn captions: **On**
+
+For a story that repeatedly shows the same person or fictional character, try **Same Cast & World**.
 
 ## Windows requirements
 
@@ -53,7 +127,7 @@ Open **Setup** inside ZeroReels and complete the four cards:
 3. **Voice** — download the Kokoro local voice model and voice pack.
 4. **Finish** — leave Ollama and ComfyUI running and confirm all checks in Diagnostics are green.
 
-Then return to **Create**, enter a topic, choose a format/style/voice, and click **Generate Video**.
+Then return to **Create**, enter a topic, choose a format/style/voice and quality options, and click **Generate Video**.
 
 Detailed instructions: [`docs/REAL_SETUP.md`](docs/REAL_SETUP.md)
 
@@ -81,6 +155,8 @@ ZeroReels stores generated projects under:
 `%USERPROFILE%\.zeroreels\projects\`
 
 A project folder contains the generated images, per-scene voice files, combined narration, captions, `project.json`, and `final.mp4`.
+
+When ZeroReels deliberately reuses a visual for adjacent narration beats, those scenes may reference the same generated source image while receiving different edit motion.
 
 ## Privacy and cost
 
