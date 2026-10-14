@@ -143,10 +143,7 @@ class WikimediaImageService:
         height = int(info.get("thumbheight") or info.get("height") or 0)
         return thumb, page_url, artist or credit, license_name, width, height
 
-    def generate(self, scene: Scene, out_dir: Path, fmt: str) -> Path:
-        query = build_image_query(self.project, scene)
-        pages = self._search(query)
-        chosen = None
+    def _choose(self, pages: list[dict]):
         for page in pages:
             thumb, page_url, credit, license_name, width, height = self._meta(page)
             if not thumb or thumb in self.used:
@@ -156,8 +153,20 @@ class WikimediaImageService:
                 continue
             if width and height and min(width, height) < 420:
                 continue
-            chosen = (page, thumb, page_url, credit, license_name)
-            break
+            return page, thumb, page_url, credit, license_name
+        return None
+
+    def generate(self, scene: Scene, out_dir: Path, fmt: str) -> Path:
+        query = build_image_query(self.project, scene)
+        chosen = self._choose(self._search(query))
+        if chosen is None:
+            # Scene language can be too specific for Commons. Fall back to the core topic before
+            # giving up; this is especially useful for historical places/people with limited media.
+            broad_query = " ".join(self.project.topic.split()).strip()
+            if broad_query and broad_query.lower() != query.lower():
+                chosen = self._choose(self._search(broad_query))
+                if chosen is not None:
+                    query = broad_query
         if chosen is None:
             raise RuntimeError(f"No suitable Wikimedia Commons image found for: {query}")
 
@@ -181,7 +190,10 @@ class WikimediaImageService:
         scene.source_license = license_name or "See source page"
         scene.source_query = query
         scene.quality_score = 100
-        scene.quality_notes = ["real web image", f"license: {scene.source_license}"]
+        scene.quality_notes = [
+            f"real web image • {scene.source_license}",
+            f"credit: {scene.source_credit or 'see source page'}",
+        ]
         return target
 
 
