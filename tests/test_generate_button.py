@@ -32,7 +32,9 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         from zeroreels.v060_pipeline import install as install_v060_pipeline
         from zeroreels.v060_render import install as install_v060_render
         from zeroreels.v060_guardrails import install as install_v060_guardrails
+        from zeroreels.v060_prompt_safe import install as install_v060_prompt_safe
         from zeroreels.v060_ui import install as install_v060_ui
+        from zeroreels.v060_labels import install as install_v060_labels
 
         install_live_setup()
         install_model_browse()
@@ -50,7 +52,9 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         install_v060_pipeline()
         install_v060_render()
         install_v060_guardrails()
+        install_v060_prompt_safe()
         install_v060_ui()
+        install_v060_labels()
 
         app = QApplication([])
         app.setStyle("Fusion")
