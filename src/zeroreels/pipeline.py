@@ -62,10 +62,23 @@ class Pipeline:
         count = len(project.scenes)
         for i, scene in enumerate(project.scenes):
             pct = 14 + int(45 * (i / max(1, count)))
-            progress(pct, f"Generating image {i + 1} of {count}")
-            image = image_service.generate(scene, out_dir, project.format)
-            scene.image_path = str(image)
-            scene.status = "image-ready"
+            previous = project.scenes[i - 1] if i > 0 else None
+            can_reuse = bool(
+                i > 0
+                and scene.reuse_previous_image
+                and previous
+                and previous.image_path
+                and Path(previous.image_path).exists()
+            )
+            if can_reuse:
+                progress(pct, f"Reusing visual for scene {i + 1} of {count}")
+                scene.image_path = previous.image_path
+                scene.status = "visual-reused"
+            else:
+                progress(pct, f"Generating image {i + 1} of {count}")
+                image = image_service.generate(scene, out_dir, project.format)
+                scene.image_path = str(image)
+                scene.status = "image-ready"
             project.save(out_dir / "project.json")
 
         progress(62, "Generating humanized voice-over")
