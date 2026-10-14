@@ -69,6 +69,18 @@ def _expanded_path(value: str) -> Path:
     return Path(os.path.expandvars(value)).expanduser()
 
 
+def normalize_comfy_base(path: str | Path) -> Path:
+    """Normalize a ComfyUI path to the base directory that owns the models folder.
+
+    ComfyUI Desktop may expose either its base directory or the models directory itself.
+    ZeroReels stores the base directory because model paths are appended as models/....
+    """
+    candidate = Path(path).expanduser()
+    if candidate.name.lower() == "models":
+        candidate = candidate.parent
+    return candidate
+
+
 def _comfy_desktop_config_roots() -> list[Path]:
     """Return roots explicitly configured by ComfyUI Desktop, highest priority first."""
     home = Path.home()
@@ -80,11 +92,12 @@ def _comfy_desktop_config_roots() -> list[Path]:
     if config_file.exists():
         try:
             data = json.loads(config_file.read_text(encoding="utf-8"))
-            # Desktop versions have used several names; basePath is the canonical one.
+            # Desktop versions have used several names. Some point to a base path,
+            # while others point directly at the models folder; normalize both.
             for key in ("basePath", "base_path", "modelBasePath", "sharedModelsPath"):
                 value = data.get(key)
                 if isinstance(value, str) and value.strip():
-                    roots.append(_expanded_path(value.strip()))
+                    roots.append(normalize_comfy_base(_expanded_path(value.strip())))
         except Exception:
             pass
 
@@ -102,7 +115,7 @@ def _comfy_desktop_config_roots() -> list[Path]:
                 if key.strip() in {"base_path", "basePath"}:
                     cleaned = value.strip().strip("'\"")
                     if cleaned:
-                        roots.append(_expanded_path(cleaned))
+                        roots.append(normalize_comfy_base(_expanded_path(cleaned)))
         except Exception:
             pass
 
@@ -120,7 +133,7 @@ def _comfy_desktop_config_roots() -> list[Path]:
 def is_comfy_program_install_root(path: str | Path) -> bool:
     """True when a path is the Desktop application install directory, not its user data root."""
     try:
-        root = Path(path).expanduser().resolve(strict=False)
+        root = normalize_comfy_base(path).resolve(strict=False)
         localappdata = Path(os.environ.get("LOCALAPPDATA", "")).resolve(strict=False)
         programs = localappdata / "Programs"
         root_text = str(root).lower()
@@ -131,15 +144,12 @@ def is_comfy_program_install_root(path: str | Path) -> bool:
 
 
 def detect_comfy_root() -> Path | None:
-    """Detect the data/model root ComfyUI Desktop actually scans.
-
-    ComfyUI Desktop stores the selected data directory in %APPDATA%/ComfyUI/config.json.
-    That configured path must win over the application's installation directory.
-    """
+    """Detect the base directory whose models folder ComfyUI Desktop actually scans."""
     home = Path.home()
 
     # First use ComfyUI Desktop's own authoritative configuration.
     for candidate in _comfy_desktop_config_roots():
+        candidate = normalize_comfy_base(candidate)
         if (candidate / "models").exists():
             return candidate
 
@@ -150,6 +160,7 @@ def detect_comfy_root() -> Path | None:
         home / "ComfyUI",
     ]
     for candidate in candidates:
+        candidate = normalize_comfy_base(candidate)
         if (candidate / "models").exists() and not is_comfy_program_install_root(candidate):
             return candidate
     return None
