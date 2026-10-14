@@ -36,6 +36,28 @@ Kokoro model: Apache License 2.0 according to the kokoro-onnx project documentat
 
 Project: https://github.com/thewh1teagle/kokoro-onnx
 
+## Chatterbox TTS (optional)
+
+v0.7 can optionally create a separate local Python environment and install `chatterbox-tts` for Chatterbox Nano reference-voice generation. It is not bundled into the ZeroReels portable ZIP.
+
+Project: https://github.com/resemble-ai/chatterbox
+
+Chatterbox model/package licensing and model-card terms remain separate from ZeroReels. Users should review the upstream license and model documentation before use.
+
+## F5-TTS (optional)
+
+v0.7 can optionally create a separate local Python environment and install `f5-tts` for reference-voice generation. It is not bundled into the ZeroReels portable ZIP.
+
+Project: https://github.com/SWivid/F5-TTS
+
+F5-TTS package/model licensing remains separate from ZeroReels. Users should review the upstream license and model-card terms before use.
+
+## Tesseract OCR (optional)
+
+Visual QA v2 can use an existing local Tesseract executable to reject generated frames containing readable text. Tesseract is optional and is not bundled by ZeroReels.
+
+Project: https://github.com/tesseract-ocr/tesseract
+
 ## FFmpeg / imageio-ffmpeg
 
 Used for video encoding and rendering. FFmpeg builds may be LGPL or GPL depending on compile-time options. The exact license information for the binary distributed through `imageio-ffmpeg` should be reviewed with that package/binary.

@@ -11,6 +11,7 @@ APP_DIR = Path.home() / ".zeroreels"
 SETTINGS_FILE = APP_DIR / "settings.json"
 PROJECTS_DIR = APP_DIR / "projects"
 TTS_DIR = APP_DIR / "tts"
+VOICE_DIR = APP_DIR / "voice"
 
 
 @dataclass(slots=True)
@@ -27,6 +28,13 @@ class Settings:
     kokoro_voice: str = "af_heart"
     kokoro_speed: float = 1.0
     kokoro_lang: str = "en-us"
+    voice_engine: str = "Kokoro Directed"
+    voice_delivery: str = "Natural Storyteller"
+    natural_voice_ref: str = ""
+    natural_voice_ref_text: str = ""
+    chatterbox_python: str = str(VOICE_DIR / "chatterbox" / "Scripts" / "python.exe")
+    f5_python: str = str(VOICE_DIR / "f5" / "Scripts" / "python.exe")
+    ocr_exe: str = ""
     ffmpeg_exe: str = ""
     music_dir: str = ""
     transition_seconds: float = 0.35
@@ -157,9 +165,6 @@ def _modern_comfy_install_roots() -> list[Path]:
             continue
         install_path = _expanded_path(raw_install.strip())
 
-        # Comfy Desktop's own helper resolves the ComfyUI root from installPath;
-        # in normal installs this is <installPath>/ComfyUI, while imported/manual
-        # installs can already point at the ComfyUI root itself.
         candidates = [install_path / "ComfyUI", install_path]
         try:
             for child in install_path.iterdir():
@@ -218,39 +223,34 @@ def is_comfy_program_install_root(path: str | Path) -> bool:
     """True for the Electron app install directory, not an actual ComfyUI instance."""
     try:
         root = normalize_comfy_base(path).resolve(strict=False)
-        localappdata = Path(os.environ.get("LOCALAPPDATA", "")).resolve(strict=False)
-        programs = localappdata / "Programs"
-        root_text = str(root).lower()
-        programs_text = str(programs).lower()
-        return root_text.startswith(programs_text + os.sep.lower()) and "comfy" in root.name.lower()
     except Exception:
+        root = normalize_comfy_base(path)
+    parts = [part.lower() for part in root.parts]
+    name = root.name.lower()
+    if name not in {"comfy desktop", "comfyui desktop", "comfyui-desktop"}:
         return False
+    return "programs" in parts or "program files" in parts or "program files (x86)" in parts
 
 
 def detect_comfy_root() -> Path | None:
-    """Detect the real ComfyUI root whose models folder the running Desktop install scans."""
+    candidates: list[Path] = []
+    candidates.extend(_modern_comfy_install_roots())
+    candidates.extend(_comfy_desktop_config_roots())
+
     home = Path.home()
-
-    # Current Comfy Desktop: use installations.json and the most recently launched
-    # actual ComfyUI install. This must win over stale legacy config.json values.
-    modern = _modern_comfy_install_roots()
-    if modern:
-        return modern[0]
-
-    # Older Desktop builds.
-    for candidate in _comfy_desktop_config_roots():
-        candidate = normalize_comfy_base(candidate)
-        if (candidate / "models").exists() and not is_comfy_program_install_root(candidate):
-            return candidate
-
-    # Portable/manual installs.
-    candidates = [
+    localapp = Path(os.environ.get("LOCALAPPDATA", home / "AppData" / "Local"))
+    candidates.extend([
         home / "ComfyUI-Shared",
         home / "Documents" / "ComfyUI",
         home / "ComfyUI",
-    ]
-    for candidate in candidates:
-        candidate = normalize_comfy_base(candidate)
-        if (candidate / "models").exists() and not is_comfy_program_install_root(candidate):
-            return candidate
+        localapp / "ComfyUI",
+        localapp / "Programs" / "ComfyUI",
+    ])
+
+    for candidate in _unique_paths(candidates):
+        root = normalize_comfy_base(candidate)
+        if is_comfy_program_install_root(root):
+            continue
+        if (root / "models").exists():
+            return root
     return None

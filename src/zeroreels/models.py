@@ -24,6 +24,9 @@ class Scene:
     seed: int = 0
     motion_style: str = ""
     transition_to_next: str = ""
+    ocr_text: str = ""
+    composition_signature: str = ""
+    director_note: str = ""
 
 
 @dataclass(slots=True)
@@ -46,6 +49,10 @@ class Project:
     actual_seconds: float = 0.0
     soundtrack_used: str = ""
     quality_summary: str = ""
+    voice_engine_used: str = ""
+    voice_delivery: str = ""
+    runtime_rewrites: int = 0
+    visual_qa_summary: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -76,7 +83,13 @@ class GenerationOptions:
     caption_size: str = "Small"
     caption_style: str = "TikTok Pop"
     transition_style: str = "Story Rhythm"
-    soundtrack_mode: str = "Auto Ambience"
+    soundtrack_mode: str = "Smart Soundscape"
     sfx: bool = True
     quality_guard: bool = True
     quality_retries: int = 2
+    voice_engine: str = "Kokoro Directed"
+    voice_delivery: str = "Natural Storyteller"
+    runtime_lock: bool = True
+    visual_qa_v2: bool = True
+    ocr_guard: bool = True
+    dynamic_visual_pacing: bool = True
