@@ -6,9 +6,12 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from .ui import MainWindow, build_stylesheet
+from .live_setup import install as install_live_setup
 
 
 def main() -> int:
+    install_live_setup()
+
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
     app.setOrganizationName("ZeroReels")
