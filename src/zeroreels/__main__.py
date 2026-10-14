@@ -27,6 +27,7 @@ from .v060_ui import install as install_v060_ui
 from .v060_labels import install as install_v060_labels
 from .v070_pipeline import install as install_v070_pipeline
 from .v070_render import install as install_v070_render
+from .v070_guardrails import install as install_v070_guardrails
 from .v070_ui import install as install_v070_ui
 
 
@@ -54,6 +55,7 @@ def main() -> int:
     # captions, semantic soundscape and Human Touch Create/Setup controls.
     install_v070_pipeline()
     install_v070_render()
+    install_v070_guardrails()
     install_v070_ui()
 
     app = QApplication(sys.argv)
