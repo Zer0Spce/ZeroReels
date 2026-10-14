@@ -42,59 +42,70 @@ class Pipeline:
             )
 
     def run(self, project: Project, options: GenerationOptions, progress=lambda value, text: None) -> Project:
+        progress(1, "Initializing local pipeline")
         if not options.mock_mode:
             progress(2, "Checking local AI setup")
             self._preflight()
+            progress(4, "Local AI setup ready")
 
         stamp = time.strftime("%Y%m%d-%H%M%S")
         out_dir = PROJECTS_DIR / f"{stamp}-{slugify(project.topic)}"
         out_dir.mkdir(parents=True, exist_ok=True)
         project.output_dir = str(out_dir)
+        progress(5, "Project workspace ready")
 
-        progress(6, "Writing and polishing narration")
         script_service = MockScriptService() if options.mock_mode else ScriptService(self.settings)
+        # Real ScriptService uses this callback for sub-stage events in v0.5.3.
+        try:
+            script_service._zr_progress = progress
+        except Exception:
+            pass
+        progress(6, "Writing short-form narration")
         project.script, project.scenes = script_service.generate(project, options.scene_count)
         if not project.title or project.title == "Untitled Reel":
             project.title = project.topic.strip()[:100] or "Untitled Reel"
         project.save(out_dir / "project.json")
+        progress(14, "Story plan saved • generating visuals")
 
         image_service = MockImageService() if options.mock_mode else ComfyImageService(self.settings)
         count = len(project.scenes)
+        image_span = 44
         for i, scene in enumerate(project.scenes):
-            pct = 14 + int(45 * (i / max(1, count)))
-            previous = project.scenes[i - 1] if i > 0 else None
-            can_reuse = bool(
-                i > 0
-                and scene.reuse_previous_image
-                and previous
-                and previous.image_path
-                and Path(previous.image_path).exists()
-            )
-            if can_reuse:
-                progress(pct, f"Reusing visual for scene {i + 1} of {count}")
-                scene.image_path = previous.image_path
-                scene.status = "visual-reused"
-            else:
-                progress(pct, f"Generating image {i + 1} of {count}")
-                image = image_service.generate(scene, out_dir, project.format)
-                scene.image_path = str(image)
-                scene.status = "image-ready"
+            start_pct = 15 + int(image_span * (i / max(1, count)))
+            end_pct = 15 + int(image_span * ((i + 1) / max(1, count)))
+            progress(start_pct, f"Generating image {i + 1} of {count}")
+            # v0.5.3 intentionally always generates a fresh visual. Continuity controls
+            # identity/world consistency in the prompt; it never reuses the previous file.
+            scene.reuse_previous_image = False
+            image = image_service.generate(scene, out_dir, project.format)
+            scene.image_path = str(image)
+            scene.status = "image-ready"
             project.save(out_dir / "project.json")
+            progress(max(start_pct + 1, end_pct - 1), f"Image {i + 1} of {count} ready")
 
-        progress(62, "Generating humanized voice-over")
+        progress(60, "All visuals ready • preparing narration")
         voice_service = MockVoiceService() if options.mock_mode else KokoroVoiceService(self.settings)
         audio = voice_service.generate(project, out_dir, progress=progress)
         project.narration_path = str(audio)
         project.save(out_dir / "project.json")
+        progress(75, "Narration ready")
 
         captions = None
         if options.captions:
-            progress(76, "Creating phrase-timed captions")
+            progress(77, "Building phrase-timed captions")
             captions = CaptionService().generate_from_scenes(project, out_dir)
             project.captions_path = str(captions)
+            progress(80, "Captions ready")
+        else:
+            progress(80, "Captions disabled")
 
-        progress(84, "Rendering natural motion and transitions")
-        video, burned = FFmpegRenderer(self.settings).render(
+        progress(83, "Preparing motion and transition edit")
+        renderer = FFmpegRenderer(self.settings)
+        try:
+            renderer._zr_progress = progress
+        except Exception:
+            pass
+        video, burned = renderer.render(
             project,
             audio,
             captions,
@@ -108,5 +119,6 @@ class Pipeline:
         project.video_path = str(video)
         project.captions_burned = burned
         project.save(out_dir / "project.json")
+        progress(98, "Final MP4 written")
         progress(100, "Video ready")
         return project
