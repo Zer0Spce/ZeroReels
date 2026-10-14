@@ -11,6 +11,7 @@ def test_main_window_builds():
     app = QApplication.instance() or QApplication([])
     window = MainWindow()
     assert window.windowTitle().startswith("ZeroReels")
-    assert window.pages.count() == 5
-    assert window.mock.isChecked()
+    assert window.pages.count() == 6
+    assert not window.test_mode.isChecked()
+    assert window.generate.text() == "Generate Video"
     window.close()

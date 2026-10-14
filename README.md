@@ -1,92 +1,93 @@
 # ZeroReels
 
-**ZeroReels** is a free, local-first Windows app that turns a topic into a short-form video pipeline:
+**ZeroReels** is a free, local-first Windows desktop app that turns an idea into a finished short-form video.
 
-**Topic → Script → Scenes → Images → Voice-over → Captions → Motion → MP4**
+**Topic → Script → Scene Images → Voice-over → Timed Captions → Motion/Transitions → MP4**
 
-ZeroReels is designed to work without paid AI APIs. Real generation is built around local tools such as Ollama, ComfyUI, Piper, whisper.cpp, and FFmpeg. A built-in Mock Mode lets you test the core pipeline before downloading large AI models.
+ZeroReels does not require a paid AI API. The production pipeline uses local tools and models on your Windows PC.
 
-## v0.3 test milestone
+## v0.4 — Real Local Pipeline
 
-What is working in the current test build:
+v0.4 moves ZeroReels beyond the v0.3 Mock Mode prototype and connects the full local generation pipeline:
 
-- Clean, uniform dark desktop UI with subtle hover, press, glow, and shadow effects
-- 9:16, 16:9, and 1:1 output presets
-- Local Ollama script + scene planning integration
-- Local ComfyUI image-generation integration using an API workflow JSON
-- Local Piper voice-over integration
-- Timed SRT caption generation from scene narration
-- whisper.cpp adapter included for later narration transcription workflows
-- FFmpeg MP4 rendering with voice-over and subtle image motion
-- Scene review screen with generated image previews and prompts
-- Queue staging foundation for multiple topics
-- Automatic project JSON saves during generation
-- Local settings for AI tools and model paths
-- Dependency diagnostics page
-- Full Mock Mode end-to-end generation for testing without AI models
-- Windows compile, UI smoke, model round-trip, and real MP4 render tests
+- **Ollama + Qwen3 4B** for scripts and scene planning
+- **ComfyUI Desktop + FLUX.2 Klein 4B** for local image generation
+- **Kokoro-ONNX** for local voice-over with multiple narrator voices
+- **FFmpeg** for motion, fades, captions, audio muxing, and H.264 MP4 export
+- Actual voice duration drives scene timing and caption timing
+- Built-in ComfyUI API workflow — no workflow JSON file to configure
+- 9:16, 16:9, and 1:1 video output
+- Cinematic slow zoom/pan motion presets
+- Soft scene fade effects
+- Burned subtitles when the FFmpeg build supports libass; `.srt` is retained as a fallback
+- Project files and intermediate assets saved locally for inspection
+- Windows-first Setup and Diagnostics pages
+- One-click Ollama / ComfyUI installation through Windows Package Manager when available
+- One-click local model/voice downloads
+- Test Mode remains available for a fast end-to-end check without AI models
+- Portable Windows build produced by GitHub Actions
 
-## Not yet in v0.3
+## Windows requirements
 
-These are intentionally not advertised as complete yet:
+- Windows 10/11 (64-bit)
+- An NVIDIA GPU is strongly recommended for FLUX.2 image generation
+- Roughly **20+ GB free disk space** is recommended for the local AI stack and generated projects
+- Real image generation is the heaviest part of the pipeline
 
-- Burned-in animated social captions
-- Automated background music and sound effects
-- Cross-scene transition editor
-- Per-scene edit/regenerate controls
-- Automatic multi-item queue execution
-- Project browser/load UI
-- One-click local model installation
+ZeroReels itself can render videos without a discrete GPU, but ComfyUI image generation speed depends on your hardware.
 
-Those can be added after the v0.3 test proves the base pipeline is stable.
+## Easiest way to run
 
-## First test
+Download the latest **ZeroReels-Windows-Portable** build from GitHub Actions once a build is available, extract it, and run:
 
-1. Install Python 3.11 or newer.
-2. Clone or download this repository.
-3. Run `setup.bat` once.
-4. Run `run.bat`.
-5. Keep **Mock Mode** enabled.
-6. Start with a short test such as 15 seconds and 3 scenes.
-7. Click **Generate Video**.
-8. Verify that the progress bar completes, the Scenes page contains previews, and `final.mp4` opens from **Open Output**.
+`ZeroReels.exe`
 
-See [`docs/TESTING.md`](docs/TESTING.md) for the full checklist.
+The portable app still downloads AI models separately on first-time setup; large model files are intentionally not bundled into the application ZIP.
 
-## Optional local tools for real generation
+## First-time AI setup
 
-ZeroReels does not bundle large models or third-party binaries. Install the components you want and point ZeroReels to them in Settings:
+Open **Setup** inside ZeroReels and complete the four cards:
 
-- **Ollama** — script and scene generation
-- **ComfyUI** — local image generation
-- **Piper** — local text-to-speech
-- **whisper.cpp** — optional transcription adapter
-- **FFmpeg** — final video rendering (ZeroReels also includes an `imageio-ffmpeg` fallback)
+1. **Script AI** — install Ollama and download `qwen3:4b`.
+2. **Image AI** — install/open ComfyUI Desktop, select its data folder, and download the FLUX.2 Klein model pack.
+3. **Voice** — download the Kokoro local voice model and voice pack.
+4. **Finish** — leave Ollama and ComfyUI running and confirm all checks in Diagnostics are green.
 
-### ComfyUI workflow placeholders
+Then return to **Create**, enter a topic, choose a format/style/voice, and click **Generate Video**.
 
-The ComfyUI API workflow JSON can use these tokens:
+Detailed instructions: [`docs/REAL_SETUP.md`](docs/REAL_SETUP.md)
 
-- `{{PROMPT}}`
-- `{{WIDTH}}`
-- `{{HEIGHT}}`
-- `{{SEED}}`
+## Development run
 
-ZeroReels replaces them before submitting the workflow to your local ComfyUI server.
+Python development is supported on **Python 3.11–3.13**.
 
-## Project philosophy
+```bat
+setup.bat
+run.bat
+```
 
-- No paid API required
-- No model files committed to Git
-- Local-first and privacy-friendly
-- Modular services so models can be swapped later
-- Safe test mode before heavyweight installs
-- Windows-first workflow
+Build the Windows portable folder locally with:
 
-## Status
+```bat
+build.bat
+```
 
-`v0.3.0` — first integrated test milestone.
+The output is `dist\ZeroReels\ZeroReels.exe`.
 
-## License
+## Where projects are saved
 
-MIT. Third-party tools and models retain their own licenses. Check each model/tool license before commercial use.
+ZeroReels stores generated projects under:
+
+`%USERPROFILE%\.zeroreels\projects\`
+
+A project folder contains the generated images, per-scene voice files, combined narration, captions, `project.json`, and `final.mp4`.
+
+## Privacy and cost
+
+- No paid API is required by the default pipeline.
+- Prompts, generated images, narration, and projects remain on your PC when using the default local engines.
+- Normal electricity, storage, and internet bandwidth for initial downloads still apply.
+
+## Licenses
+
+ZeroReels source code is MIT licensed. Third-party applications, libraries, and model files retain their own licenses. See [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).

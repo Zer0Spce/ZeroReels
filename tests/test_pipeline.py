@@ -26,13 +26,18 @@ def test_mock_components(tmp_path):
     captions = CaptionService().generate_from_scenes(project, tmp_path)
     assert audio.exists()
     assert captions.exists()
-    assert "-->" in captions.read_text(encoding="utf-8")
+    text = captions.read_text(encoding="utf-8")
+    assert "-->" in text
+    assert len(text.splitlines()) > 4
 
 
 def test_mock_render_creates_mp4(tmp_path):
     project = _mock_project(tmp_path)
     audio = MockVoiceService().generate(project, tmp_path)
     captions = CaptionService().generate_from_scenes(project, tmp_path)
-    video = FFmpegRenderer(Settings()).render(project, audio, captions, tmp_path, motion=True)
+    video, burned = FFmpegRenderer(Settings()).render(
+        project, audio, captions, tmp_path, motion=True, transitions=True
+    )
     assert video.exists()
     assert video.stat().st_size > 10_000
+    assert isinstance(burned, bool)
