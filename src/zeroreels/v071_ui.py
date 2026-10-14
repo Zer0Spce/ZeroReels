@@ -66,6 +66,10 @@ def install() -> None:
         quality_card = self.continuity_box.parentWidget()
         status_card = self.progress.parentWidget()
         log_card = self.create_live_log.parentWidget()
+        self.create_main_card = main_card
+        self.create_quality_card = quality_card
+        self.create_status_card = status_card
+        self.create_log_card = log_card
 
         grid = quality_card.layout()
         if isinstance(grid, QGridLayout):
@@ -119,14 +123,15 @@ def install() -> None:
                 widget.deleteLater()
 
         main_card.setMinimumHeight(350)
-        quality_card.setMinimumHeight(455)
+        quality_card.setMinimumHeight(500)
         status_card.setMinimumHeight(118)
-        log_card.setMinimumHeight(190)
-        self.create_live_log.setMinimumHeight(145)
+        log_card.setMinimumHeight(180)
+        self.create_live_log.setMinimumHeight(132)
         self.create_live_log.setMaximumHeight(16777215)
 
         content = QWidget()
         content.setObjectName("CreateResponsiveContent")
+        content.setMinimumHeight(820)
         body = QVBoxLayout(content)
         body.setContentsMargins(2, 2, 2, 8)
         body.setSpacing(14)
@@ -135,8 +140,8 @@ def install() -> None:
         top_layout = QHBoxLayout(top)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(14)
-        top_layout.addWidget(main_card, 3, Qt.AlignTop)
-        top_layout.addWidget(quality_card, 2, Qt.AlignTop)
+        top_layout.addWidget(main_card, 3, Qt.AlignmentFlag.AlignTop)
+        top_layout.addWidget(quality_card, 2, Qt.AlignmentFlag.AlignTop)
         body.addWidget(top)
         body.addWidget(status_card)
         body.addWidget(log_card)
@@ -155,9 +160,8 @@ def install() -> None:
         _enforce_control_heights(content)
         self.topic.setMinimumHeight(92)
         self.topic.setMaximumHeight(110)
-        self.create_live_log.setMinimumHeight(145)
+        self.create_live_log.setMinimumHeight(132)
 
-        # A little more breathing room at the minimum supported window width.
         if isinstance(main_card.layout(), QGridLayout):
             main_card.layout().setVerticalSpacing(11)
         if isinstance(quality_card.layout(), QGridLayout):
