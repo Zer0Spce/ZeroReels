@@ -4,7 +4,7 @@ from datetime import datetime
 
 from PySide6.QtCore import QEasingCurve
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QVBoxLayout
+from PySide6.QtWidgets import QComboBox, QGridLayout, QHBoxLayout, QLabel, QPlainTextEdit, QVBoxLayout
 
 from . import ui
 
@@ -89,6 +89,13 @@ def _clear_create_log(self) -> None:
         self._append_create_log("ZeroReels Create Live Log ready.")
 
 
+def _combo(items: list[str], current: str) -> QComboBox:
+    box = QComboBox()
+    box.addItems(items)
+    box.setCurrentText(current)
+    return box
+
+
 def install() -> None:
     ui.ACCENT = "#F6C945"
     ui.ACCENT_HOVER = "#FFD75E"
@@ -109,6 +116,8 @@ def install() -> None:
 
     original_sidebar = ui.MainWindow._sidebar
     original_create_page = ui.MainWindow._create_page
+    original_make_project = ui.MainWindow._make_project
+    original_options = ui.MainWindow._options
     original_generate = ui.MainWindow._generate
     original_progress = ui.MainWindow._on_progress
     original_complete = ui.MainWindow._on_complete
@@ -119,24 +128,65 @@ def install() -> None:
         for label in frame.findChildren(QLabel):
             if label.text() == "v0.4 REAL":
                 label.setText("v0.5 QUALITY")
-                label.setMaximumWidth(108)
+                label.setMaximumWidth(110)
         return frame
 
     def create_page(self):
         page = original_create_page(self)
         layout = page.layout()
-        card = ui.Card()
-        box = QVBoxLayout(card)
+        self.transitions.setText("Use scene transitions")
+        self.motion.setText("Natural camera motion")
+        self.captions.setText("Burn captions into video")
+
+        quality = ui.Card()
+        q = QGridLayout(quality)
+        q.setContentsMargins(20, 17, 20, 17)
+        q.setHorizontalSpacing(14)
+        q.setVerticalSpacing(8)
+        title = QLabel("Quality & Continuity")
+        title.setObjectName("Section")
+        note = QLabel("Keep recurring subjects coherent, place captions lower, and choose a natural transition language.")
+        note.setObjectName("Hint")
+        note.setWordWrap(True)
+        q.addWidget(title, 0, 0, 1, 4)
+        q.addWidget(note, 1, 0, 1, 4)
+
+        self.continuity_box = _combo(
+            ["Consistent Story", "Same Cast & World", "Independent Shots"],
+            "Consistent Story",
+        )
+        self.caption_position_box = _combo(["Bottom", "Safe Lower", "Center-Lower"], "Bottom")
+        self.caption_size_box = _combo(["Small", "Medium", "Large"], "Small")
+        self.transition_style_box = _combo(
+            ["Natural Crossfade", "Soft Dissolve", "Smooth Push", "Clean Cut"],
+            "Natural Crossfade",
+        )
+        controls = [
+            ("Visual continuity", self.continuity_box),
+            ("Caption position", self.caption_position_box),
+            ("Caption size", self.caption_size_box),
+            ("Transition style", self.transition_style_box),
+        ]
+        for col, (label_text, control) in enumerate(controls):
+            label = QLabel(label_text)
+            label.setObjectName("Hint")
+            q.addWidget(label, 2, col)
+            q.addWidget(control, 3, col)
+        # _page() adds title/subtitle first; the original Create card is index 2.
+        layout.insertWidget(3, quality)
+
+        log_card = ui.Card()
+        box = QVBoxLayout(log_card)
         box.setContentsMargins(18, 16, 18, 16)
         box.setSpacing(9)
         top = QHBoxLayout()
-        title = QLabel("Live Generation Log")
-        title.setObjectName("Section")
-        hint = QLabel("Real-time pipeline activity")
+        log_title = QLabel("Live Generation Log")
+        log_title.setObjectName("Section")
+        hint = QLabel("Real-time script → images → voice → captions → render")
         hint.setObjectName("Hint")
         clear = ui.SoftButton("Clear")
         clear.clicked.connect(self._clear_create_log)
-        top.addWidget(title)
+        top.addWidget(log_title)
         top.addSpacing(8)
         top.addWidget(hint)
         top.addStretch(1)
@@ -152,9 +202,21 @@ def install() -> None:
             "background:#09090A; border:1px solid #252527; color:#D7D7D2; padding:10px; }"
         )
         box.addWidget(self.create_live_log)
-        layout.insertWidget(max(0, layout.count() - 1), card)
+        layout.insertWidget(max(0, layout.count() - 1), log_card)
         self._clear_create_log()
         return page
+
+    def make_project(self):
+        project = original_make_project(self)
+        project.continuity_mode = self.continuity_box.currentText()
+        return project
+
+    def options(self):
+        opts = original_options(self)
+        opts.caption_position = self.caption_position_box.currentText()
+        opts.caption_size = self.caption_size_box.currentText()
+        opts.transition_style = self.transition_style_box.currentText()
+        return opts
 
     def generate(self):
         if hasattr(self, "create_live_log"):
@@ -164,12 +226,16 @@ def install() -> None:
                 f"Format {self.format_box.currentText()} • {self.seconds.value()} sec target • "
                 f"{self.scene_count.value()} scenes • {self.style_box.currentText()}"
             )
+            self._append_create_log(
+                f"Continuity: {self.continuity_box.currentText()} • "
+                f"Captions: {self.caption_position_box.currentText()} / {self.caption_size_box.currentText()} • "
+                f"Transition: {self.transition_style_box.currentText()}"
+            )
             self._append_create_log(f"Narrator: {self.voice_box.currentText()}")
         return original_generate(self)
 
     def progress(self, value: int, text: str):
         last = getattr(self, "_last_create_log_stage", None)
-        # Image and voice scene updates are useful individually; repeated status text is not.
         if text != last:
             self._append_create_log(f"{value:>3}%  {text}")
             self._last_create_log_stage = text
@@ -193,6 +259,8 @@ def install() -> None:
 
     ui.MainWindow._sidebar = sidebar
     ui.MainWindow._create_page = create_page
+    ui.MainWindow._make_project = make_project
+    ui.MainWindow._options = options
     ui.MainWindow._generate = generate
     ui.MainWindow._on_progress = progress
     ui.MainWindow._on_complete = complete
