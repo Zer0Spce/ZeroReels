@@ -10,7 +10,7 @@ import urllib.request
 from .models import Project, Scene
 
 
-USER_AGENT = "ZeroReels/0.7.1 (local desktop app; https://github.com/Zer0Spce/ZeroReels)"
+USER_AGENT = "ZeroReels/0.7.2 (local desktop app; https://github.com/Zer0Spce/ZeroReels)"
 STOPWORDS = {
     "about", "after", "again", "against", "also", "among", "because", "before", "being", "between",
     "could", "does", "during", "each", "from", "have", "into", "just", "more", "most", "other", "over",
@@ -18,6 +18,22 @@ STOPWORDS = {
     "what", "when", "where", "which", "while", "with", "would", "your", "were", "been", "will", "only",
     "then", "them", "some", "such", "like", "because", "around", "still", "even", "much", "many",
 }
+
+TOPIC_PREFIXES = (
+    r"the\s+rise\s+and\s+fall\s+of",
+    r"rise\s+and\s+fall\s+of",
+    r"the\s+story\s+of",
+    r"story\s+of",
+    r"the\s+history\s+of",
+    r"history\s+of",
+    r"the\s+mystery\s+of",
+    r"mystery\s+of",
+    r"the\s+truth\s+about",
+    r"truth\s+about",
+    r"what\s+happened\s+to",
+    r"who\s+was",
+    r"who\s+is",
+)
 
 
 def _json(url: str, timeout: int = 20) -> dict:
@@ -81,7 +97,7 @@ def grounded_topic(topic: str, context: str) -> str:
 
 
 def _keywords(text: str, limit: int = 5) -> list[str]:
-    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'-]{2,}", text or "")
+    words = re.findall(r"[A-Za-z0-9][A-Za-z0-9'’-]{2,}", text or "")
     seen: set[str] = set()
     result: list[str] = []
     for word in words:
@@ -95,11 +111,81 @@ def _keywords(text: str, limit: int = 5) -> list[str]:
     return result
 
 
-def build_image_query(project: Project, scene: Scene) -> str:
+def _topic_subject(topic: str) -> str:
+    value = " ".join((topic or "").split()).strip(" .,:;-—")
+    if not value:
+        return ""
+    prefix = "^(?:" + "|".join(TOPIC_PREFIXES) + r")\s+"
+    value = re.sub(prefix, "", value, flags=re.IGNORECASE).strip()
+    # Remove common editorial descriptors that make Commons full-text search needlessly strict.
+    value = re.sub(
+        r"^(?:(?:NBA|NFL|MLB|NHL|UFC|WWE)\s+)?(?:superstar|star|legend|player|athlete)\s+",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip()
+    value = re.sub(
+        r"^(?:NBA|NFL|MLB|NHL|UFC|WWE)\s+(?:superstar|star|legend|player|athlete)\s+",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip()
+    return value or " ".join((topic or "").split()).strip()
+
+
+def primary_subject(project: Project) -> str:
+    """Prefer the verified Wikipedia page title, then a cleaned version of the user's topic."""
+    context = str(getattr(project, "research_context", "") or "").strip()
+    if context:
+        first = context.splitlines()[0].strip()
+        if ":" in first:
+            title = first.split(":", 1)[0].strip()
+            if 2 <= len(title) <= 100 and len(title.split()) <= 12:
+                return title
+    source = str(getattr(project, "research_source", "") or "").strip()
+    if source:
+        try:
+            slug = urllib.parse.unquote(urllib.parse.urlparse(source).path.rsplit("/", 1)[-1]).replace("_", " ").strip()
+            if 2 <= len(slug) <= 100:
+                return slug
+        except Exception:
+            pass
+    return _topic_subject(project.topic)
+
+
+def build_image_queries(project: Project, scene: Scene) -> list[str]:
+    """Build a broadening query ladder instead of one sentence-sized all-or-nothing search."""
+    subject = primary_subject(project)
     topic = " ".join(project.topic.split()).strip()
-    details = _keywords(scene.narration, 5)
-    # Shot role words are deliberately omitted; Commons searches perform better on subjects/events than cinematography terms.
-    return " ".join([topic, *details]).strip()
+    details = _keywords(scene.narration, 6)
+    candidates: list[str] = []
+
+    # Start specific enough to follow the scene, but never append an entire narration sentence.
+    if subject and details:
+        candidates.append(" ".join([subject, *details[:2]]))
+        candidates.append(" ".join([subject, details[0]]))
+    if subject:
+        candidates.append(subject)
+    cleaned_topic = _topic_subject(topic)
+    if cleaned_topic:
+        candidates.append(cleaned_topic)
+    if topic and len(topic.split()) <= 8:
+        candidates.append(topic)
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        cleaned = " ".join(candidate.split()).strip()
+        key = cleaned.casefold()
+        if cleaned and key not in seen:
+            seen.add(key)
+            unique.append(cleaned)
+    return unique or ([topic] if topic else [])
+
+
+def build_image_query(project: Project, scene: Scene) -> str:
+    queries = build_image_queries(project, scene)
+    return queries[0] if queries else ""
 
 
 class WikimediaImageService:
@@ -108,24 +194,83 @@ class WikimediaImageService:
     def __init__(self, project: Project):
         self.project = project
         self.used: set[str] = set()
+        self.subject = primary_subject(project)
 
-    def _search(self, query: str) -> list[dict]:
-        url = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode({
-            "action": "query",
-            "generator": "search",
-            "gsrsearch": query,
-            "gsrnamespace": 6,
-            "gsrlimit": 18,
+    @staticmethod
+    def _image_props() -> dict[str, object]:
+        return {
             "prop": "imageinfo",
             "iiprop": "url|mime|size|extmetadata",
             "iiurlwidth": 1600,
             "format": "json",
             "origin": "*",
-        })
+        }
+
+    def _search(self, query: str) -> list[dict]:
+        params: dict[str, object] = {
+            "action": "query",
+            "generator": "search",
+            "gsrsearch": query,
+            "gsrnamespace": 6,
+            "gsrlimit": 24,
+            **self._image_props(),
+        }
+        url = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(params)
         data = _json(url, timeout=30)
         pages = list(data.get("query", {}).get("pages", {}).values())
         pages.sort(key=lambda item: int(item.get("index", 9999)))
         return pages
+
+    def _category(self, subject: str) -> list[dict]:
+        if not subject:
+            return []
+        params: dict[str, object] = {
+            "action": "query",
+            "generator": "categorymembers",
+            "gcmtitle": f"Category:{subject}",
+            "gcmtype": "file",
+            "gcmlimit": 50,
+            **self._image_props(),
+        }
+        url = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(params)
+        data = _json(url, timeout=30)
+        return list(data.get("query", {}).get("pages", {}).values())
+
+    def _lookup_file(self, filename: str) -> list[dict]:
+        name = filename.strip()
+        if not name:
+            return []
+        if not name.lower().startswith("file:"):
+            name = "File:" + name
+        params: dict[str, object] = {
+            "action": "query",
+            "titles": name,
+            **self._image_props(),
+        }
+        url = "https://commons.wikimedia.org/w/api.php?" + urllib.parse.urlencode(params)
+        data = _json(url, timeout=30)
+        return [page for page in data.get("query", {}).get("pages", {}).values() if "missing" not in page]
+
+    def _wikipedia_lead(self, subject: str) -> list[dict]:
+        """Resolve Wikipedia's lead image back through Commons so licensing stays traceable."""
+        if not subject:
+            return []
+        params = {
+            "action": "query",
+            "prop": "pageimages",
+            "piprop": "name",
+            "titles": subject,
+            "redirects": 1,
+            "format": "json",
+            "origin": "*",
+        }
+        url = "https://en.wikipedia.org/w/api.php?" + urllib.parse.urlencode(params)
+        data = _json(url, timeout=25)
+        for page in data.get("query", {}).get("pages", {}).values():
+            filename = str(page.get("pageimage", "")).strip()
+            if filename:
+                return self._lookup_file(filename)
+        return []
 
     @staticmethod
     def _meta(page: dict) -> tuple[str, str, str, str, int, int]:
@@ -157,18 +302,47 @@ class WikimediaImageService:
         return None
 
     def generate(self, scene: Scene, out_dir: Path, fmt: str) -> Path:
-        query = build_image_query(self.project, scene)
-        chosen = self._choose(self._search(query))
+        attempts: list[str] = []
+        chosen = None
+        query_used = ""
+
+        for query in build_image_queries(self.project, scene):
+            attempts.append(query)
+            try:
+                chosen = self._choose(self._search(query))
+            except Exception:
+                chosen = None
+            if chosen is not None:
+                query_used = query
+                break
+
+        # Named people/places often have a rich Commons category even when full-text scene
+        # wording is too specific. This is what fixes topics such as Derrick Rose.
+        if chosen is None and self.subject:
+            category_label = f"Category:{self.subject}"
+            attempts.append(category_label)
+            try:
+                chosen = self._choose(self._category(self.subject))
+            except Exception:
+                chosen = None
+            if chosen is not None:
+                query_used = category_label
+
+        # Last real-media fallback: ask Wikipedia for the subject's lead image, but only keep
+        # it if the exact file resolves through Commons (so attribution/license stay available).
+        if chosen is None and self.subject:
+            lead_label = f"Wikipedia lead:{self.subject}"
+            attempts.append(lead_label)
+            try:
+                chosen = self._choose(self._wikipedia_lead(self.subject))
+            except Exception:
+                chosen = None
+            if chosen is not None:
+                query_used = lead_label
+
         if chosen is None:
-            # Scene language can be too specific for Commons. Fall back to the core topic before
-            # giving up; this is especially useful for historical places/people with limited media.
-            broad_query = " ".join(self.project.topic.split()).strip()
-            if broad_query and broad_query.lower() != query.lower():
-                chosen = self._choose(self._search(broad_query))
-                if chosen is not None:
-                    query = broad_query
-        if chosen is None:
-            raise RuntimeError(f"No suitable Wikimedia Commons image found for: {query}")
+            tried = " | ".join(attempts[-6:]) or self.subject or self.project.topic
+            raise RuntimeError(f"No suitable Wikimedia Commons image found after broadened search: {tried}")
 
         page, thumb, page_url, credit, license_name = chosen
         request = urllib.request.Request(thumb, headers={"User-Agent": USER_AGENT, "Accept": "image/*"})
@@ -188,7 +362,7 @@ class WikimediaImageService:
         scene.source_url = page_url or thumb
         scene.source_credit = credit or _clean_html(str(page.get("title", "")))
         scene.source_license = license_name or "See source page"
-        scene.source_query = query
+        scene.source_query = query_used
         scene.quality_score = 100
         scene.quality_notes = [
             f"real web image • {scene.source_license}",

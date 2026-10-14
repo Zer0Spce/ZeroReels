@@ -78,10 +78,10 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         window = MainWindow()
         window.resize(1584, 951)
         window.show()
-        app.processEvents()
+        for _ in range(8):
+            app.processEvents()
+            time.sleep(0.01)
 
-        # Regression for the v0.7 screenshot: interactive controls must never collapse
-        # into clipped slivers even after Human Touch rows are added.
         assert hasattr(window, "create_scroll_area")
         for control in [
             window.format_box, window.style_box, window.seconds, window.scene_count,
@@ -92,9 +92,22 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
             assert control.minimumHeight() >= 38, (control, control.minimumHeight())
             assert control.height() >= 38, (control, control.height())
 
-        # Minimum supported window size uses scrolling instead of crushing the controls.
-        window.resize(1120, 720)
+        # The Create page must always open at the actual top even if a lower widget had focus
+        # or the user left the page while scrolled down.
+        bar = window.create_scroll_area.verticalScrollBar()
+        bar.setValue(bar.maximum())
+        window._navigate(1)
         app.processEvents()
+        window._navigate(0)
+        for _ in range(12):
+            app.processEvents()
+            time.sleep(0.01)
+        assert bar.value() == bar.minimum(), (bar.value(), bar.minimum(), bar.maximum())
+
+        # Minimum supported window size scrolls instead of crushing/cropping controls.
+        window.resize(1120, 720)
+        for _ in range(5):
+            app.processEvents()
         assert window.image_source_box.height() >= 38
         assert window.generate.height() >= 38
 
