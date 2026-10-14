@@ -41,6 +41,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         from zeroreels.v070_ui import install as install_v070_ui
         from zeroreels.v070_setup_extra import install as install_v070_setup_extra
         from zeroreels.v071_pipeline import install as install_v071_pipeline
+        from zeroreels.v071_render import install as install_v071_render
         from zeroreels.v071_ui import install as install_v071_ui
 
         install_live_setup()
@@ -68,6 +69,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         install_v070_ui()
         install_v070_setup_extra()
         install_v071_pipeline()
+        install_v071_render()
         install_v071_ui()
 
         app = QApplication([])
