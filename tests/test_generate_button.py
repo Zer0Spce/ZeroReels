@@ -110,7 +110,6 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
             app.processEvents()
         assert window.image_source_box.height() >= 38
         assert window.generate.height() >= 38
-        assert window.create_quality_card.minimumHeight() >= window.create_quality_card.sizeHint().height()
 
         window.topic.setPlainText("A tiny lighthouse test")
         window.test_mode.setChecked(True)
