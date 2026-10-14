@@ -27,6 +27,11 @@ class Scene:
     ocr_text: str = ""
     composition_signature: str = ""
     director_note: str = ""
+    source_type: str = "AI Generated"
+    source_url: str = ""
+    source_credit: str = ""
+    source_license: str = ""
+    source_query: str = ""
 
 
 @dataclass(slots=True)
@@ -53,6 +58,9 @@ class Project:
     voice_delivery: str = ""
     runtime_rewrites: int = 0
     visual_qa_summary: str = ""
+    image_source_mode: str = "AI Generated"
+    research_context: str = ""
+    research_source: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -93,3 +101,5 @@ class GenerationOptions:
     visual_qa_v2: bool = True
     ocr_guard: bool = True
     dynamic_visual_pacing: bool = True
+    image_source_mode: str = "AI Generated"
+    research_grounding: bool = True
