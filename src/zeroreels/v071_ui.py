@@ -30,14 +30,14 @@ def _combo(items: list[str], current: str) -> QComboBox:
 
 def _enforce_control_heights(container: QWidget) -> None:
     # Never let Qt/DPI scaling collapse interactive controls into 15–20 px slivers.
-    for widget in container.findChildren((QComboBox, QSpinBox, QLineEdit, QPushButton)):
-        widget.setMinimumHeight(38)
-        widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+    for cls in (QComboBox, QSpinBox, QLineEdit, QPushButton):
+        for widget in container.findChildren(cls):
+            widget.setMinimumHeight(38)
+            widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
     for widget in container.findChildren(QCheckBox):
         widget.setMinimumHeight(26)
     for widget in container.findChildren(QPlainTextEdit):
-        if widget.objectName() != "create_live_log":
-            widget.setMinimumHeight(84)
+        widget.setMinimumHeight(84)
 
 
 def install() -> None:
@@ -145,9 +145,9 @@ def install() -> None:
         scroll = QScrollArea(page)
         scroll.setObjectName("CreateResponsiveScroll")
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setWidget(content)
         self.create_scroll_area = scroll
         root.addWidget(scroll, 1)
@@ -155,6 +155,7 @@ def install() -> None:
         _enforce_control_heights(content)
         self.topic.setMinimumHeight(92)
         self.topic.setMaximumHeight(110)
+        self.create_live_log.setMinimumHeight(145)
 
         # A little more breathing room at the minimum supported window width.
         if isinstance(main_card.layout(), QGridLayout):
