@@ -35,6 +35,9 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         from zeroreels.v060_prompt_safe import install as install_v060_prompt_safe
         from zeroreels.v060_ui import install as install_v060_ui
         from zeroreels.v060_labels import install as install_v060_labels
+        from zeroreels.v070_pipeline import install as install_v070_pipeline
+        from zeroreels.v070_render import install as install_v070_render
+        from zeroreels.v070_ui import install as install_v070_ui
 
         install_live_setup()
         install_model_browse()
@@ -55,6 +58,9 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         install_v060_prompt_safe()
         install_v060_ui()
         install_v060_labels()
+        install_v070_pipeline()
+        install_v070_render()
+        install_v070_ui()
 
         app = QApplication([])
         app.setStyle("Fusion")
@@ -63,16 +69,20 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         window.topic.setPlainText("A tiny lighthouse test")
         window.test_mode.setChecked(True)
         window.format_box.setCurrentText("1:1")
-        window.seconds.setMinimum(6)
-        window.seconds.setValue(6)
+        window.seconds.setMinimum(15)
+        window.seconds.setValue(15)
         window.scene_count.setValue(3)
 
         assert window.style_box.currentText() == "TikTok Story"
         assert window.transition_style_box.currentText() == "Story Rhythm"
         assert window.caption_style_box.currentText() == "TikTok Pop"
-        assert window.soundtrack_box.currentText() == "Auto Ambience"
-        assert window.quality_guard_check.isChecked()
-        assert window.sfx_check.isChecked()
+        assert window.caption_position_box.currentText() == "Auto Safe"
+        assert window.soundtrack_box.currentText() == "Smart Soundscape"
+        assert window.voice_engine_box.currentText() == "Kokoro Directed"
+        assert window.voice_delivery_box.currentText() == "Natural Storyteller"
+        assert window.runtime_lock_check.isChecked()
+        assert window.visual_qa_v2_check.isChecked()
+        assert window.dynamic_visual_pacing_check.isChecked()
         assert window.continuity_box.findText("Hero Character Lock") >= 0
 
         window.generate.click()
@@ -82,15 +92,15 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         initial_log = window.create_live_log.toPlainText()
         assert "Starting a new ZeroReels generation" in initial_log
         assert "Live stage tracking connected" in initial_log
-        assert "Professional polish:" in initial_log
+        assert "Human Touch:" in initial_log
 
-        deadline = time.time() + 40
+        deadline = time.time() + 60
         while time.time() < deadline and window.worker.isRunning():
             app.processEvents()
             time.sleep(0.02)
 
         assert not window.worker.isRunning(), "Mock generation thread did not finish in time"
-        for _ in range(80):
+        for _ in range(100):
             app.processEvents()
             if window.current_project and window.current_project.video_path:
                 break
@@ -99,16 +109,19 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         log = window.create_live_log.toPlainText()
         assert window.current_project is not None, log
         assert window.current_project.video_path, log
-        assert "Initializing professional local pipeline" in log, log
-        assert "Writing retention-first narration" in log, log
-        assert "Generating scene 1/3" in log, log
-        assert "Building TikTok Pop captions" in log, log
-        assert "Starting final edit" in log, log
-        assert "Mixing soundtrack, ducking and subtle SFX" in log, log
+        assert "Initializing Human Touch pipeline" in log, log
+        assert "Writing natural retention-first narration" in log, log
+        assert "Voice Director" in log, log
+        assert "generating human-directed visuals" in log.lower(), log
+        assert "speech-paced TikTok Pop captions" in log, log
+        assert "Human editor pass" in log, log
+        assert "Sound design ready" in log, log
         assert "Video ready" in log, log
         assert "Preparing local pipeline • elapsed" not in log, log
         assert window.current_project.captions_path.endswith("captions.ass")
         assert window.current_project.soundtrack_used
+        assert window.current_project.voice_engine_used == "Kokoro Directed"
+        assert len(window.current_project.scenes) >= 3
         window.close()
         '''
     )
@@ -118,7 +131,7 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         [sys.executable, "-c", script],
         text=True,
         capture_output=True,
-        timeout=55,
+        timeout=75,
         env=env,
     )
     assert proc.returncode == 0, proc.stdout + "\n" + proc.stderr
