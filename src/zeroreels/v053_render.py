@@ -25,12 +25,21 @@ def install() -> None:
 
     def generate(self):
         result = original_generate(self)
-        # v0.5.2 used a generic heartbeat timer. v0.5.3 has an authoritative
-        # worker-event queue, so stop the old timer to prevent fake/stale log lines.
         legacy = getattr(self, "_generation_heartbeat_timer", None)
         if legacy:
             legacy.stop()
         return result
+
+    def progress(self, value: int, text: str):
+        # Final v0.5.3 progress handler. The worker queue is the source of truth, so
+        # bypass the older heartbeat wrapper and log only actual pipeline stage events.
+        self.progress.setValue(value)
+        self.status_text.setText(text)
+        self.status_detail.setText(f"{value}% complete")
+        last = getattr(self, "_last_create_log_stage", None)
+        if value < 100 and text != last and hasattr(self, "_append_create_log"):
+            self._append_create_log(f"{value:>3}%  {text}")
+            self._last_create_log_stage = text
 
     def transition_config(self, transitions: bool):
         if not transitions:
@@ -97,6 +106,7 @@ def install() -> None:
 
     ui.MainWindow._create_page = create_page
     ui.MainWindow._generate = generate
+    ui.MainWindow._on_progress = progress
     services.FFmpegRenderer._transition_config = transition_config
     services.FFmpegRenderer._render_scene_clips = render_scene_clips
     services.FFmpegRenderer._combine_filter = combine_filter
