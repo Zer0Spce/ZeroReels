@@ -31,6 +31,7 @@ from .v070_guardrails import install as install_v070_guardrails
 from .v070_ui import install as install_v070_ui
 from .v070_setup_extra import install as install_v070_setup_extra
 from .v071_pipeline import install as install_v071_pipeline
+from .v071_render import install as install_v071_render
 from .v071_ui import install as install_v071_ui
 
 
@@ -62,6 +63,7 @@ def main() -> int:
     # v0.7.1 installs last: it replaces the compressed Create dashboard with a
     # responsive scroll layout and adds opt-in real/web imagery + research grounding.
     install_v071_pipeline()
+    install_v071_render()
     install_v071_ui()
 
     app = QApplication(sys.argv)
