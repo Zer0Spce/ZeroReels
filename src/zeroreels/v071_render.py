@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import subprocess
 
 from . import services
@@ -80,5 +81,26 @@ def reality_render_scene_clips(self, project: Project, out_dir: Path, motion: bo
     return clips
 
 
+def _normalize_final_graph_sar(filtergraph: str) -> str:
+    """Normalize every scene input again before concat/xfade.
+
+    This protects projects created with older clips and catches codec/container SAR metadata that
+    can survive the per-scene render despite identical 1080x1920 dimensions.
+    """
+    return re.sub(
+        r"(\[\d+:v\]format=yuv420p)(,setpts=PTS-STARTPTS)",
+        r"\1,setsar=1\2",
+        filtergraph,
+    )
+
+
 def install() -> None:
     services.FFmpegRenderer._render_scene_clips = reality_render_scene_clips
+
+    original_combine_filter = services.FFmpegRenderer._combine_filter
+
+    def square_pixel_combine_filter(self, project: Project, transitions: bool, burn_captions: bool):
+        filtergraph, output = original_combine_filter(self, project, transitions, burn_captions)
+        return _normalize_final_graph_sar(filtergraph), output
+
+    services.FFmpegRenderer._combine_filter = square_pixel_combine_filter
