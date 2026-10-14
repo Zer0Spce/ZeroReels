@@ -9,9 +9,11 @@ from .v060_render import _motion_filter, _story_transition_plan
 
 
 def _real_media_filter(width: int, height: int, frames: int, motion: bool) -> str:
-    """Preserve authentic source framing in vertical video instead of brutally center-cropping it."""
+    """Preserve authentic source framing and normalize every archival clip to SAR 1:1."""
     # The blurred copy fills the delivery canvas. The sharp copy is fully contained, which is
     # much safer for archival landscape photos, maps and historic documentation.
+    # IMPORTANT: source photos often carry odd pixel-aspect metadata. FFmpeg concat/xfade
+    # requires matching SAR, so the final output is always forced to square pixels.
     base = (
         f"split=2[bg][fg];"
         f"[bg]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
@@ -21,13 +23,12 @@ def _real_media_filter(width: int, height: int, frames: int, motion: bool) -> st
         f"[bg2][fg2]overlay=(W-w)/2:(H-h)/2"
     )
     if not motion:
-        return base + ",fps=30,format=yuv420p"
-    f = max(1, frames)
+        return base + ",setsar=1,fps=30,format=yuv420p"
     # Restrained 1.5% editorial push keeps authentic photography alive without making it seasick.
     return (
         base
         + f",zoompan=z='min(zoom+0.00012,1.015)':x='iw/2-(iw/zoom/2)':"
-          f"y='ih/2-(ih/zoom/2)':d=1:s={width}x{height}:fps=30,format=yuv420p"
+          f"y='ih/2-(ih/zoom/2)':d=1:s={width}x{height}:fps=30,setsar=1,format=yuv420p"
     )
 
 
@@ -49,7 +50,8 @@ def reality_render_scene_clips(self, project: Project, out_dir: Path, motion: bo
             vf = _real_media_filter(width, height, frames, motion)
             scene.motion_style = "Archival fit + subtle push" if motion else "Archival fit"
         else:
-            vf = _motion_filter(scene, width, height, frames, motion)
+            # Defense-in-depth for Hybrid mode: force square pixels on AI clips too.
+            vf = _motion_filter(scene, width, height, frames, motion) + ",setsar=1"
 
         if i < len(plan):
             scene.transition_to_next = plan[i][2]
