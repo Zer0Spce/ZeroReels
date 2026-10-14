@@ -14,6 +14,7 @@ class Scene:
     image_prompt: str
     duration: float = 4.0
     image_path: str = ""
+    audio_path: str = ""
     status: str = "pending"
 
 
@@ -30,10 +31,12 @@ class Project:
     created_at: float = field(default_factory=time.time)
     output_dir: str = ""
     video_path: str = ""
+    narration_path: str = ""
+    captions_path: str = ""
+    captions_burned: bool = False
 
     def to_dict(self) -> dict[str, Any]:
-        data = asdict(self)
-        return data
+        return asdict(self)
 
     def save(self, path: str | Path) -> Path:
         target = Path(path)
@@ -50,7 +53,7 @@ class Project:
 
 @dataclass(slots=True)
 class GenerationOptions:
-    mock_mode: bool = True
+    mock_mode: bool = False
     full_auto: bool = True
     captions: bool = True
     music: bool = False
