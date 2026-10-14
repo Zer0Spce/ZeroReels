@@ -34,8 +34,8 @@ jobs:
           $size = (Get-Item "dist/ZeroReels/ZeroReels.exe").Length
           if ($size -lt 100000) { throw "ZeroReels.exe unexpectedly small" }
           $env:QT_QPA_PLATFORM = "offscreen"
-          & "dist/ZeroReels/ZeroReels.exe" --smoke-test
-          if ($LASTEXITCODE -ne 0) { throw "Packaged ZeroReels.exe smoke test failed" }
+          $process = Start-Process -FilePath "dist/ZeroReels/ZeroReels.exe" -ArgumentList "--smoke-test" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged ZeroReels.exe smoke test failed with exit code $($process.ExitCode)" }
       - name: Package
         shell: pwsh
         run: Compress-Archive -Path dist/ZeroReels/* -DestinationPath ZeroReels-Windows-Portable.zip
