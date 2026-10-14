@@ -8,15 +8,18 @@ from . import services, v060_render
 
 
 def _combine_filter_cfr(self, project, transitions: bool, burn_captions: bool):
-    """Preserve the CFR metadata FFmpeg 7.1 needs for xfade.
+    """Keep FFmpeg 7.1 happy when Story Rhythm mixes cuts and xfade transitions.
 
-    The scene clips are already 30fps and start at zero. Running setpts/fps on each
-    xfade input can clear link frame_rate to 0/0 on FFmpeg 7.1, so keep the streams intact.
+    The encoded scene clips are already CFR 30fps. `concat` outputs AVTB (1/1,000,000)
+    while untouched MP4 inputs commonly arrive as 1/15360. A later xfade therefore
+    fails unless both sides share a timebase. Normalize only the timebase with `settb`;
+    do not insert `fps`/`setpts`, because those previously caused FFmpeg 7.1 to lose
+    the link frame-rate metadata required by xfade.
     """
     n = len(project.scenes)
     filters: list[str] = []
     for i in range(n):
-        filters.append(f"[{i}:v]format=yuv420p[v{i}]")
+        filters.append(f"[{i}:v]format=yuv420p,settb=AVTB[v{i}]")
     if n == 1:
         current = "[v0]"
     else:
@@ -30,12 +33,12 @@ def _combine_filter_cfr(self, project, transitions: bool, burn_captions: bool):
             next_extra = plan[i][1] if i < len(plan) and plan[i][0] != "cut" else 0.0
             next_duration = max(0.25, project.scenes[i].duration + next_extra)
             if kind == "cut" or duration <= 0:
-                filters.append(f"{current}[v{i}]concat=n=2:v=1:a=0{out}")
+                filters.append(f"{current}[v{i}]concat=n=2:v=1:a=0,settb=AVTB{out}")
                 current_duration += next_duration
             else:
                 offset = max(0.0, current_duration - duration)
                 filters.append(
-                    f"{current}[v{i}]xfade=transition={kind}:duration={duration:.3f}:offset={offset:.3f}{out}"
+                    f"{current}[v{i}]xfade=transition={kind}:duration={duration:.3f}:offset={offset:.3f},settb=AVTB{out}"
                 )
                 current_duration = current_duration + next_duration - duration
             current = out
