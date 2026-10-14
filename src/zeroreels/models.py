@@ -17,6 +17,13 @@ class Scene:
     audio_path: str = ""
     status: str = "pending"
     reuse_previous_image: bool = False
+    shot_role: str = ""
+    quality_score: int = 0
+    quality_notes: list[str] = field(default_factory=list)
+    retry_count: int = 0
+    seed: int = 0
+    motion_style: str = ""
+    transition_to_next: str = ""
 
 
 @dataclass(slots=True)
@@ -36,6 +43,9 @@ class Project:
     narration_path: str = ""
     captions_path: str = ""
     captions_burned: bool = False
+    actual_seconds: float = 0.0
+    soundtrack_used: str = ""
+    quality_summary: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -58,10 +68,15 @@ class GenerationOptions:
     mock_mode: bool = False
     full_auto: bool = True
     captions: bool = True
-    music: bool = False
+    music: bool = True
     motion: bool = True
     transitions: bool = True
     scene_count: int = 8
     caption_position: str = "Bottom"
     caption_size: str = "Small"
-    transition_style: str = "Natural Crossfade"
+    caption_style: str = "TikTok Pop"
+    transition_style: str = "Story Rhythm"
+    soundtrack_mode: str = "Auto Ambience"
+    sfx: bool = True
+    quality_guard: bool = True
+    quality_retries: int = 2
