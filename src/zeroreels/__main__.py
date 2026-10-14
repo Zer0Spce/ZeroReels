@@ -30,6 +30,9 @@ from .v070_render import install as install_v070_render
 from .v070_guardrails import install as install_v070_guardrails
 from .v070_ui import install as install_v070_ui
 from .v070_setup_extra import install as install_v070_setup_extra
+from .v071_pipeline import install as install_v071_pipeline
+from .v071_render import install as install_v071_render
+from .v071_ui import install as install_v071_ui
 
 
 def main() -> int:
@@ -52,13 +55,16 @@ def main() -> int:
     install_v060_prompt_safe()
     install_v060_ui()
     install_v060_labels()
-    # v0.7 owns the final runtime-locked voice pass, Visual QA v2, speech-paced
-    # captions, semantic soundscape and Human Touch Create/Setup controls.
     install_v070_pipeline()
     install_v070_render()
     install_v070_guardrails()
     install_v070_ui()
     install_v070_setup_extra()
+    # v0.7.1 installs last: it replaces the compressed Create dashboard with a
+    # responsive scroll layout and adds opt-in real/web imagery + research grounding.
+    install_v071_pipeline()
+    install_v071_render()
+    install_v071_ui()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
