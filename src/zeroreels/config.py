@@ -38,6 +38,8 @@ class Settings:
     ffmpeg_exe: str = ""
     music_dir: str = ""
     transition_seconds: float = 0.35
+    image_source_mode: str = "AI Generated"
+    research_grounding: bool = False
 
     def save(self) -> None:
         APP_DIR.mkdir(parents=True, exist_ok=True)
