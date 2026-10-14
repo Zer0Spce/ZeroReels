@@ -9,6 +9,7 @@ from .ui import MainWindow
 from .live_setup import install as install_live_setup
 from .model_browse import install as install_model_browse
 from .quality_services import install as install_quality_services
+from .quality_orchestration import install as install_quality_orchestration
 from .quality_ui import install as install_quality_ui
 
 
@@ -16,6 +17,7 @@ def main() -> int:
     install_live_setup()
     install_model_browse()
     install_quality_services()
+    install_quality_orchestration()
     install_quality_ui()
 
     app = QApplication(sys.argv)
