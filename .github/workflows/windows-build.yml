@@ -1,0 +1,44 @@
+name: Windows Portable Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "pyproject.toml"
+      - "requirements.txt"
+      - "launcher.py"
+      - "ZeroReels.spec"
+      - ".github/workflows/windows-build.yml"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install build dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Build portable app
+        run: python -m PyInstaller --noconfirm --clean ZeroReels.spec
+      - name: Smoke test portable executable
+        shell: pwsh
+        run: |
+          if (!(Test-Path "dist/ZeroReels/ZeroReels.exe")) { throw "ZeroReels.exe missing" }
+          $size = (Get-Item "dist/ZeroReels/ZeroReels.exe").Length
+          if ($size -lt 100000) { throw "ZeroReels.exe unexpectedly small" }
+          $env:QT_QPA_PLATFORM = "offscreen"
+          & "dist/ZeroReels/ZeroReels.exe" --smoke-test
+          if ($LASTEXITCODE -ne 0) { throw "Packaged ZeroReels.exe smoke test failed" }
+      - name: Package
+        shell: pwsh
+        run: Compress-Archive -Path dist/ZeroReels/* -DestinationPath ZeroReels-Windows-Portable.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZeroReels-Windows-Portable
+          path: ZeroReels-Windows-Portable.zip
+          if-no-files-found: error
