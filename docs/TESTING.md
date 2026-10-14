@@ -1,80 +1,40 @@
-# ZeroReels v0.3 Manual Test Checklist
+# ZeroReels v0.4 Test Checklist
 
-Use **Mock Mode** for the first pass. This confirms the UI, scene pipeline, voice test track, captions sidecar, and MP4 renderer without requiring Ollama, ComfyUI, Piper, or large models.
+## Portable app
 
-## 1. Setup
+- [ ] `ZeroReels.exe` starts without a console window.
+- [ ] Main window opens with six pages: Create, Scenes, Queue, Setup, Settings, Diagnostics.
+- [ ] Buttons show subtle hover/press feedback and UI spacing remains consistent at 100% and 125% Windows scale.
 
-- Run `setup.bat`.
-- Confirm the virtual environment is created and dependencies install without errors.
-- Run `run.bat`.
-- Confirm the ZeroReels window opens without a console error.
+## Test Mode
 
-## 2. UI quality
+- [ ] Enable Test Mode.
+- [ ] Generate a 15-second, 3-scene 9:16 video.
+- [ ] Progress reaches 100%.
+- [ ] `final.mp4` opens.
+- [ ] Scene cards populate.
+- [ ] Project folder opens.
 
-- Sidebar spacing and page alignment are uniform.
-- Buttons have subtle hover/press feedback and do not jump or resize.
-- Cards have consistent radius, border, and shadow treatment.
-- Inputs remain readable at the minimum supported window size.
-- Create, Scenes, Queue, Settings, and Diagnostics navigation works.
+## Real setup
 
-## 3. Mock generation
+- [ ] Install/detect Ollama.
+- [ ] Pull `qwen3:4b`.
+- [ ] Install/open ComfyUI Desktop.
+- [ ] Select the ComfyUI data folder.
+- [ ] Download FLUX.2 Klein files.
+- [ ] Download Kokoro model + voices.
+- [ ] Diagnostics shows all required production checks green.
 
-Recommended quick values:
+## Real generation
 
-- Topic: `A mysterious lighthouse that suddenly went dark`
-- Format: `9:16`
-- Style: `Cinematic Documentary`
-- Length: `15 sec`
-- Scenes: `3`
-- Mock Mode: ON
-- Captions: ON
-- Subtle image motion: ON
-
-Click **Generate Video**.
-
-Expected:
-
-- Progress advances through script, images, voice-over, captions, and rendering.
-- No paid API or external AI service is contacted.
-- A project folder is created under `%USERPROFILE%\.zeroreels\projects`.
-- The project folder contains `project.json`, scene images, `narration.wav`, `captions.srt`, and `final.mp4`.
-- **Open Output** launches the rendered MP4.
-- The Scenes page shows generated preview images, narration, prompts, and durations.
-
-## 4. Queue
-
-- Enter a topic and click **Add to Queue**.
-- Open Queue and verify the topic appears.
-- Click **Load Next** and verify it returns to Create with that topic loaded.
-- **Clear Queue** removes staged items.
-
-## 5. Settings and diagnostics
-
-- Change a harmless field in Settings and click **Save Settings**.
-- Restart ZeroReels and verify the value persists.
-- Open Diagnostics.
-- Installed tools should display as available; missing optional tools should display as unavailable without crashing the app.
-- The bundled FFmpeg fallback should be detected after normal setup.
-
-## 6. Real local AI test — after Mock Mode passes
-
-Configure tools one at a time instead of all at once:
-
-1. Ollama + selected local language model.
-2. ComfyUI + exported API workflow JSON using ZeroReels placeholders.
-3. Piper executable + voice model.
-4. FFmpeg if you prefer a system installation over the bundled fallback.
-
-Then disable Mock Mode and run a 15-second / 3-scene project first.
-
-## Report useful failures
-
-When something fails, capture:
-
-- Which pipeline stage was shown in the status area.
-- The exact error message.
-- Whether Mock Mode was enabled.
-- Selected format/style/scene count.
-- GPU model and VRAM when the failure involves ComfyUI.
-
-Do not upload private model files, generated media, or personal settings unless they are needed to reproduce the issue.
+- [ ] Leave Test Mode OFF.
+- [ ] Generate a 15-second, 3-scene test reel first.
+- [ ] Ollama returns a valid script and exactly 3 scenes.
+- [ ] ComfyUI generates all 3 scene images.
+- [ ] Kokoro generates intelligible narration.
+- [ ] Scene durations match the actual narration rather than the requested target estimate.
+- [ ] Captions roughly follow narration scene timing.
+- [ ] Final MP4 is H.264/AAC and plays in Windows Media Player.
+- [ ] Motion is subtle and not nauseating.
+- [ ] Fade effects are clean.
+- [ ] Captions either burn into the video or remain as a valid SRT fallback.
