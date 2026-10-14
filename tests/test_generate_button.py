@@ -24,6 +24,8 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         from zeroreels.quality_ui import install as install_quality_ui
         from zeroreels.layout_polish import install as install_layout_polish
         from zeroreels.v051_hotfix import install as install_v051_hotfix
+        from zeroreels.v052_script_base import install as install_v052_script_base
+        from zeroreels.v052_hotfix import install as install_v052_hotfix
 
         install_live_setup()
         install_model_browse()
@@ -33,6 +35,8 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         install_quality_ui()
         install_layout_polish()
         install_v051_hotfix()
+        install_v052_script_base()
+        install_v052_hotfix()
 
         app = QApplication([])
         app.setStyle("Fusion")
@@ -49,7 +53,9 @@ def test_generate_button_starts_and_finishes_mock_pipeline():
         app.processEvents()
 
         assert window.worker is not None, "Generate button did not create a pipeline worker"
-        assert "Starting a new ZeroReels generation" in window.create_live_log.toPlainText()
+        initial_log = window.create_live_log.toPlainText()
+        assert "Starting a new ZeroReels generation" in initial_log
+        assert "Pipeline worker started" in initial_log
 
         assert window.worker.wait(30000), "Mock generation thread did not finish in time"
         for _ in range(30):
