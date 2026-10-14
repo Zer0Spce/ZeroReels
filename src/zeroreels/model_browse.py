@@ -31,29 +31,51 @@ def _append_log(window, text: str) -> None:
             pass
 
 
+def _choose_comfy_root(self, start: Path | None = None) -> Path | None:
+    """Let the user explicitly choose the active models folder when auto-detect fails."""
+    folder = QFileDialog.getExistingDirectory(
+        self,
+        "Select ACTIVE ComfyUI models folder (or the folder containing models)",
+        str(start or Path.home()),
+    )
+    if not folder:
+        return None
+    selected = Path(folder)
+    if selected.name.lower() == "models":
+        root = selected.parent
+    elif (selected / "models").exists():
+        root = selected
+    else:
+        QMessageBox.warning(
+            self,
+            "ZeroReels",
+            "That folder is not a ComfyUI model location. Select the 'models' folder itself, or its parent folder.",
+        )
+        return None
+    return root
+
+
 def _browse_comfy_model_file(self, key: str) -> None:
     if key not in MODEL_FIELDS:
         return
 
     label, subfolder = MODEL_FIELDS[key]
-    detected = detect_comfy_root()
-    root = detected or (normalize_comfy_base(self.settings.comfy_root) if self.settings.comfy_root else None)
-    if not root:
-        QMessageBox.warning(
-            self,
-            "ZeroReels",
-            "ZeroReels cannot find the active ComfyUI model folder yet. Open ComfyUI Desktop once, then use Setup → Detect / Select Data Folder.",
-        )
-        return
 
-    root = normalize_comfy_base(root)
-    expected_dir = root / "models" / subfolder
-    expected_dir.mkdir(parents=True, exist_ok=True)
+    # Browse the actual file FIRST. The Browse button must remain useful even if
+    # Comfy Desktop auto-detection is what is currently broken.
+    detected = detect_comfy_root()
+    saved = normalize_comfy_base(self.settings.comfy_root) if self.settings.comfy_root else None
+    initial_root = detected or saved
+    start = Path.home()
+    if initial_root:
+        candidate = initial_root / "models" / subfolder
+        if candidate.exists():
+            start = candidate
 
     filename, _ = QFileDialog.getOpenFileName(
         self,
         f"Select {label}",
-        str(expected_dir if expected_dir.exists() else root),
+        str(start),
         "SafeTensors model (*.safetensors);;All files (*.*)",
     )
     if not filename:
@@ -64,14 +86,29 @@ def _browse_comfy_model_file(self, key: str) -> None:
         QMessageBox.warning(self, "ZeroReels", "The selected file no longer exists.")
         return
 
+    # Re-run detection after the picker. Current Comfy Desktop installations.json
+    # is authoritative. If that still cannot be found, ask for the active models
+    # folder directly rather than blocking the user in a detection loop.
+    root = detect_comfy_root()
+    if not root:
+        inferred_start = selected.parent.parent if selected.parent.parent.exists() else selected.parent
+        root = _choose_comfy_root(self, inferred_start)
+        if not root:
+            return
+
+    root = normalize_comfy_base(root)
+    expected_dir = root / "models" / subfolder
+    expected_dir.mkdir(parents=True, exist_ok=True)
     target = expected_dir / selected.name
+
     if not _same_path(selected, target):
         answer = QMessageBox.question(
             self,
-            "Import model into ComfyUI",
-            f"{selected.name} is outside ComfyUI's active {subfolder} folder.\n\n"
-            f"Move it here so ComfyUI can load it?\n{target}\n\n"
-            "Moving avoids creating another multi-gigabyte copy.",
+            "Import model into active ComfyUI",
+            f"ZeroReels will move this file into the model folder used by the active ComfyUI installation.\n\n"
+            f"From:\n{selected}\n\n"
+            f"To:\n{target}\n\n"
+            "Move it now? This avoids making another multi-gigabyte copy.",
             QMessageBox.Yes | QMessageBox.Cancel,
             QMessageBox.Yes,
         )
@@ -96,13 +133,18 @@ def _browse_comfy_model_file(self, key: str) -> None:
     self.settings.comfy_root = str(root)
     self.settings.save()
 
-    if hasattr(self, "setting_edits") and key in self.setting_edits:
-        self.setting_edits[key].setText(identifier)
+    if hasattr(self, "setting_edits"):
+        if key in self.setting_edits:
+            self.setting_edits[key].setText(identifier)
+        if "comfy_root" in self.setting_edits:
+            self.setting_edits["comfy_root"].setText(str(root))
 
+    _append_log(self, f"Active ComfyUI root: {root}")
     _append_log(self, f"Selected {label}: {identifier}")
+    _append_log(self, f"Verified file location: {selected}")
     _append_log(self, "Restart ComfyUI Desktop, then click Run Checks in Diagnostics.")
     if hasattr(self, "status_detail"):
-        self.status_detail.setText(f"{label} selected. Restart ComfyUI, then run Diagnostics.")
+        self.status_detail.setText(f"{label} imported. Restart ComfyUI, then run Diagnostics.")
 
     try:
         self._refresh_setup_summary()
@@ -112,8 +154,9 @@ def _browse_comfy_model_file(self, key: str) -> None:
 
     QMessageBox.information(
         self,
-        "Model selected",
-        f"{label} is now set to:\n{identifier}\n\nRestart ComfyUI Desktop, then run Diagnostics.",
+        "Model imported",
+        f"{label} is now in the active ComfyUI model folder:\n\n{selected}\n\n"
+        "Fully close and reopen ComfyUI Desktop, then run Diagnostics.",
     )
 
 

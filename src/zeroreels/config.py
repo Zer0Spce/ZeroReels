@@ -70,19 +70,114 @@ def _expanded_path(value: str) -> Path:
 
 
 def normalize_comfy_base(path: str | Path) -> Path:
-    """Normalize a ComfyUI path to the base directory that owns the models folder.
-
-    ComfyUI Desktop may expose either its base directory or the models directory itself.
-    ZeroReels stores the base directory because model paths are appended as models/....
-    """
+    """Normalize a ComfyUI path to the base directory that owns the models folder."""
     candidate = Path(path).expanduser()
     if candidate.name.lower() == "models":
         candidate = candidate.parent
     return candidate
 
 
+def _unique_paths(paths: list[Path]) -> list[Path]:
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in paths:
+        try:
+            resolved = path.resolve(strict=False)
+        except Exception:
+            resolved = path
+        key = str(resolved).lower() if os.name == "nt" else str(resolved)
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
+
+
+def _modern_desktop_user_data_dirs() -> list[Path]:
+    """Locations used by current Comfy Desktop builds for installations.json."""
+    home = Path.home()
+    appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
+    candidates = [
+        appdata / "comfyui-desktop-2",
+        appdata / "ComfyUI",
+        appdata / "Comfy Desktop",
+        appdata / "comfyui-electron",
+    ]
+    try:
+        for child in appdata.iterdir():
+            if child.is_dir() and "comfy" in child.name.lower():
+                candidates.append(child)
+    except Exception:
+        pass
+    return _unique_paths(candidates)
+
+
+def _record_last_launched(record: dict) -> float:
+    values: list[float] = []
+    raw = record.get("lastLaunchedAt")
+    if isinstance(raw, (int, float)):
+        values.append(float(raw))
+    per_category = record.get("lastLaunchedAtByCategory")
+    if isinstance(per_category, dict):
+        for value in per_category.values():
+            if isinstance(value, (int, float)):
+                values.append(float(value))
+    return max(values, default=0.0)
+
+
+def _modern_comfy_install_roots() -> list[Path]:
+    """Return real ComfyUI roots from current Comfy Desktop installation records.
+
+    Current Comfy Desktop stores one or more installations in installations.json.
+    Each installation has its own ComfyUI directory and built-in models folder.
+    That folder is always visible to the running ComfyUI instance and is safer for
+    ZeroReels than guessing the Electron application's Program Files directory.
+    """
+    roots: list[Path] = []
+    records: list[dict] = []
+
+    for data_dir in _modern_desktop_user_data_dirs():
+        path = data_dir / "installations.json"
+        if not path.exists():
+            continue
+        try:
+            parsed = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if isinstance(parsed, list):
+            records.extend(item for item in parsed if isinstance(item, dict))
+
+    records.sort(key=_record_last_launched, reverse=True)
+
+    for record in records:
+        status = str(record.get("status") or "installed").lower()
+        if status in {"failed", "installing"}:
+            continue
+        raw_install = record.get("installPath")
+        if not isinstance(raw_install, str) or not raw_install.strip():
+            continue
+        install_path = _expanded_path(raw_install.strip())
+
+        # Comfy Desktop's own helper resolves the ComfyUI root from installPath;
+        # in normal installs this is <installPath>/ComfyUI, while imported/manual
+        # installs can already point at the ComfyUI root itself.
+        candidates = [install_path / "ComfyUI", install_path]
+        try:
+            for child in install_path.iterdir():
+                if child.is_dir() and child.name.lower() == "comfyui":
+                    candidates.insert(0, child)
+        except Exception:
+            pass
+
+        for candidate in _unique_paths(candidates):
+            if (candidate / "models").exists():
+                roots.append(candidate)
+                break
+
+    return _unique_paths(roots)
+
+
 def _comfy_desktop_config_roots() -> list[Path]:
-    """Return roots explicitly configured by ComfyUI Desktop, highest priority first."""
+    """Return roots configured by legacy/older ComfyUI Desktop builds."""
     home = Path.home()
     appdata = Path(os.environ.get("APPDATA", home / "AppData" / "Roaming"))
     config_dir = appdata / "ComfyUI"
@@ -92,8 +187,6 @@ def _comfy_desktop_config_roots() -> list[Path]:
     if config_file.exists():
         try:
             data = json.loads(config_file.read_text(encoding="utf-8"))
-            # Desktop versions have used several names. Some point to a base path,
-            # while others point directly at the models folder; normalize both.
             for key in ("basePath", "base_path", "modelBasePath", "sharedModelsPath"):
                 value = data.get(key)
                 if isinstance(value, str) and value.strip():
@@ -101,7 +194,6 @@ def _comfy_desktop_config_roots() -> list[Path]:
         except Exception:
             pass
 
-    # Some Desktop versions also persist the selected model root in YAML.
     for yaml_name in ("extra_models_config.yaml", "extra_model_paths.yaml"):
         yaml_file = config_dir / yaml_name
         if not yaml_file.exists():
@@ -119,19 +211,11 @@ def _comfy_desktop_config_roots() -> list[Path]:
         except Exception:
             pass
 
-    # Preserve order while removing duplicates (case-insensitive on Windows).
-    unique: list[Path] = []
-    seen: set[str] = set()
-    for root in roots:
-        key = str(root.resolve(strict=False)).lower() if os.name == "nt" else str(root.resolve(strict=False))
-        if key not in seen:
-            seen.add(key)
-            unique.append(root)
-    return unique
+    return _unique_paths(roots)
 
 
 def is_comfy_program_install_root(path: str | Path) -> bool:
-    """True when a path is the Desktop application install directory, not its user data root."""
+    """True for the Electron app install directory, not an actual ComfyUI instance."""
     try:
         root = normalize_comfy_base(path).resolve(strict=False)
         localappdata = Path(os.environ.get("LOCALAPPDATA", "")).resolve(strict=False)
@@ -144,16 +228,22 @@ def is_comfy_program_install_root(path: str | Path) -> bool:
 
 
 def detect_comfy_root() -> Path | None:
-    """Detect the base directory whose models folder ComfyUI Desktop actually scans."""
+    """Detect the real ComfyUI root whose models folder the running Desktop install scans."""
     home = Path.home()
 
-    # First use ComfyUI Desktop's own authoritative configuration.
+    # Current Comfy Desktop: use installations.json and the most recently launched
+    # actual ComfyUI install. This must win over stale legacy config.json values.
+    modern = _modern_comfy_install_roots()
+    if modern:
+        return modern[0]
+
+    # Older Desktop builds.
     for candidate in _comfy_desktop_config_roots():
         candidate = normalize_comfy_base(candidate)
-        if (candidate / "models").exists():
+        if (candidate / "models").exists() and not is_comfy_program_install_root(candidate):
             return candidate
 
-    # Fallbacks for portable/manual installs.
+    # Portable/manual installs.
     candidates = [
         home / "ComfyUI-Shared",
         home / "Documents" / "ComfyUI",
