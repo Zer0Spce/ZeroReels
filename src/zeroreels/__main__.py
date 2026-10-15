@@ -34,6 +34,7 @@ from .v071_pipeline import install as install_v071_pipeline
 from .v071_render import install as install_v071_render
 from .v071_ui import install as install_v071_ui
 from .v074_setup_fix import install as install_v074_setup_fix
+from .v075_voice_fix import install as install_v075_voice_fix
 
 
 def main() -> int:
@@ -65,6 +66,7 @@ def main() -> int:
     install_v071_render()
     install_v071_ui()
     install_v074_setup_fix()
+    install_v075_voice_fix()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
