@@ -103,11 +103,14 @@ def robotic_score(text: str) -> tuple[int, list[str]]:
 
 
 def _protected_tokens(text: str) -> set[str]:
-    # Preserve explicit numbers and likely proper names through the style-only Ear Pass.
+    """Keep hard facts without mistaking every sentence-initial capitalized word for a name."""
     numbers = set(re.findall(r"\b\d[\d,.:/%-]*\b", text or ""))
-    names = set(re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b", text or ""))
-    stop = {"The", "A", "An", "But", "And", "So", "When", "After", "Before", "For", "Then", "That", "This"}
-    return numbers | {name for name in names if name not in stop}
+    # Multi-word names (Derrick Rose, Area 51 via the numeric guard) and all-caps acronyms such
+    # as ECW/NBA are stable factual anchors. Single capitalized words are intentionally omitted:
+    # they are often just the first word of a sentence and previously blocked useful rewrites.
+    multi_names = set(re.findall(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b", text or ""))
+    acronyms = set(re.findall(r"\b[A-Z]{2,}(?:-[A-Z]{2,})*\b", text or ""))
+    return numbers | multi_names | acronyms
 
 
 def _ear_pass(service, project, model: str, narrations: list[str]) -> list[str]:
@@ -198,7 +201,7 @@ def natural_script_generate(self, project, scene_count: int):
     model = getattr(project, "script_model_used", "") or v080_script.resolve_writer_model(self.settings, model_mode)[0]
     narrations = [scene.narration for scene in scenes]
     before_text = " ".join(narrations)
-    before_score, before_flags = robotic_score(before_text)
+    before_score, _ = robotic_score(before_text)
     v080_script._progress(self, 12, "Director's Ear Pass • reading narration out loud for human cadence")
     candidate = _ear_pass(self, project, model, narrations)
     after_text = " ".join(candidate)
@@ -207,7 +210,7 @@ def natural_script_generate(self, project, scene_count: int):
     if candidate == narrations:
         project.script_quality_summary = (
             (getattr(project, "script_quality_summary", "") or "Story Director")
-            + f" • Ear Pass kept original ({before_score} cadence flags)"
+            + f" • Ear Pass kept original ({before_score} cadence score)"
         )
         return script, scenes
 
@@ -424,6 +427,8 @@ def install() -> None:
             if FAST_CLONE_ENGINE not in items:
                 insert_at = 2 if box.count() >= 2 else box.count()
                 box.insertItem(insert_at, FAST_CLONE_ENGINE)
+            if getattr(self.settings, "voice_engine", "") == FAST_CLONE_ENGINE:
+                box.setCurrentText(FAST_CLONE_ENGINE)
             box.setToolTip(
                 "Kokoro Directed is built in. Chatterbox Turbo Fast Clone copies the voice character from your reference WAV and prefers CUDA for speed. Chatterbox Nano is the slower CPU-friendly clone mode; F5-TTS Studio is the heavier clone option."
             )
@@ -438,7 +443,7 @@ def install() -> None:
             if not card or not card.layout():
                 continue
             note = QLabel(
-                "Fast Voice Clone uses the same Chatterbox install and reference WAV, but runs Chatterbox Turbo on CUDA when available. Voice generation happens before FLUX, so the GPU is free for this stage and the process releases VRAM before images start."
+                "Fast Voice Clone uses the same Chatterbox install and reference WAV, but runs Chatterbox Turbo on CUDA when available. Voice generation happens before FLUX, so the GPU is free for this stage and the process releases VRAM before images start. Use a clean reference voice you have permission to use."
             )
             note.setObjectName("Hint")
             note.setWordWrap(True)
