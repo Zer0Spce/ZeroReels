@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import subprocess
 
 from . import services
 from .models import Project
 from .v060_render import _motion_filter, _story_transition_plan
+from .win_subprocess import run_hidden
 
 
 def _real_media_filter(width: int, height: int, frames: int, motion: bool) -> str:
-    """Preserve authentic source framing in vertical video instead of brutally center-cropping it."""
-    # The blurred copy fills the delivery canvas. The sharp copy is fully contained, which is
-    # much safer for archival landscape photos, maps and historic documentation.
+    """Preserve authentic source framing and normalize every archival clip to SAR 1:1."""
     base = (
         f"split=2[bg][fg];"
         f"[bg]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
@@ -21,13 +21,11 @@ def _real_media_filter(width: int, height: int, frames: int, motion: bool) -> st
         f"[bg2][fg2]overlay=(W-w)/2:(H-h)/2"
     )
     if not motion:
-        return base + ",fps=30,format=yuv420p"
-    f = max(1, frames)
-    # Restrained 1.5% editorial push keeps authentic photography alive without making it seasick.
+        return base + ",setsar=1,fps=30,format=yuv420p"
     return (
         base
         + f",zoompan=z='min(zoom+0.00012,1.015)':x='iw/2-(iw/zoom/2)':"
-          f"y='ih/2-(ih/zoom/2)':d=1:s={width}x{height}:fps=30,format=yuv420p"
+          f"y='ih/2-(ih/zoom/2)':d=1:s={width}x{height}:fps=30,setsar=1,format=yuv420p"
     )
 
 
@@ -49,7 +47,7 @@ def reality_render_scene_clips(self, project: Project, out_dir: Path, motion: bo
             vf = _real_media_filter(width, height, frames, motion)
             scene.motion_style = "Archival fit + subtle push" if motion else "Archival fit"
         else:
-            vf = _motion_filter(scene, width, height, frames, motion)
+            vf = _motion_filter(scene, width, height, frames, motion) + ",setsar=1"
 
         if i < len(plan):
             scene.transition_to_next = plan[i][2]
@@ -68,7 +66,7 @@ def reality_render_scene_clips(self, project: Project, out_dir: Path, motion: bo
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart", str(target.resolve()),
         ]
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = run_hidden(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if proc.returncode != 0:
             raise RuntimeError(
                 f"FFmpeg could not prepare scene {scene.index}:\n"
@@ -78,5 +76,22 @@ def reality_render_scene_clips(self, project: Project, out_dir: Path, motion: bo
     return clips
 
 
+def _normalize_final_graph_sar(filtergraph: str) -> str:
+    """Normalize every scene input again before concat/xfade."""
+    return re.sub(
+        r"(\[\d+:v\]format=yuv420p)(,setpts=PTS-STARTPTS)",
+        r"\1,setsar=1\2",
+        filtergraph,
+    )
+
+
 def install() -> None:
     services.FFmpegRenderer._render_scene_clips = reality_render_scene_clips
+
+    original_combine_filter = services.FFmpegRenderer._combine_filter
+
+    def square_pixel_combine_filter(self, project: Project, transitions: bool, burn_captions: bool):
+        filtergraph, output = original_combine_filter(self, project, transitions, burn_captions)
+        return _normalize_final_graph_sar(filtergraph), output
+
+    services.FFmpegRenderer._combine_filter = square_pixel_combine_filter

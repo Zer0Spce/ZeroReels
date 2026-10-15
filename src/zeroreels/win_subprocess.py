@@ -5,14 +5,10 @@ import subprocess
 from typing import Any
 
 
-_ORIGINAL_POPEN = subprocess.Popen
-_INSTALLED = False
-
-
 def _windows_hidden_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
-    """Return Popen kwargs that keep helper/FFmpeg consoles invisible on Windows."""
+    """Return subprocess kwargs that hide only the child process ZeroReels launches."""
     if os.name != "nt":
-        return kwargs
+        return dict(kwargs)
     updated = dict(kwargs)
     create_no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
     updated["creationflags"] = int(updated.get("creationflags", 0) or 0) | int(create_no_window)
@@ -24,20 +20,21 @@ def _windows_hidden_kwargs(kwargs: dict[str, Any]) -> dict[str, Any]:
     return updated
 
 
+def run_hidden(*args, **kwargs):
+    """Run one ZeroReels-owned helper without flashing a Windows console."""
+    return subprocess.run(*args, **_windows_hidden_kwargs(kwargs))
+
+
+def popen_hidden(*args, **kwargs):
+    """Launch one ZeroReels-owned helper without flashing a Windows console."""
+    return subprocess.Popen(*args, **_windows_hidden_kwargs(kwargs))
+
+
 def install() -> None:
-    """Patch subprocess.Popen once so all ZeroReels child processes stay background-only.
+    """Backward-compatible no-op.
 
-    subprocess.run/check_call/check_output all resolve subprocess.Popen at call time, so this
-    also covers older renderer/helper modules without having to remember creation flags at every
-    individual FFmpeg or Python invocation.
+    v0.7.2 replaced subprocess.Popen globally, which could interfere with Kokoro/phonemizer and
+    other third-party packages. v0.7.3 intentionally leaves Python's subprocess module untouched.
+    Call run_hidden/popen_hidden only for ZeroReels-owned external processes instead.
     """
-    global _INSTALLED
-    if _INSTALLED or os.name != "nt":
-        return
-
-    def hidden_popen(*args, **kwargs):
-        return _ORIGINAL_POPEN(*args, **_windows_hidden_kwargs(kwargs))
-
-    subprocess.Popen = hidden_popen  # type: ignore[assignment]
-    setattr(subprocess, "_zeroreels_no_console", True)
-    _INSTALLED = True
+    return None

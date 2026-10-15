@@ -6,7 +6,6 @@ from PySide6.QtWidgets import QApplication
 
 from . import ui
 from .ui import MainWindow
-from .win_subprocess import install as install_windows_subprocess
 from .live_setup import install as install_live_setup
 from .model_browse import install as install_model_browse
 from .quality_services import install as install_quality_services
@@ -37,9 +36,6 @@ from .v071_ui import install as install_v071_ui
 
 
 def main() -> int:
-    # Install first so FFmpeg, helper Python environments and external voice engines never
-    # flash console windows while ZeroReels is rendering on Windows.
-    install_windows_subprocess()
     install_live_setup()
     install_model_browse()
     install_quality_services()
