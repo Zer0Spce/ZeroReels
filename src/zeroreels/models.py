@@ -32,6 +32,7 @@ class Scene:
     source_credit: str = ""
     source_license: str = ""
     source_query: str = ""
+    media_type: str = "image"
 
 
 @dataclass(slots=True)
@@ -59,6 +60,7 @@ class Project:
     runtime_rewrites: int = 0
     visual_qa_summary: str = ""
     image_source_mode: str = "AI Generated"
+    web_video_broll: bool = False
     research_context: str = ""
     research_source: str = ""
     script_mode: str = "AI Script"
@@ -107,6 +109,7 @@ class GenerationOptions:
     ocr_guard: bool = True
     dynamic_visual_pacing: bool = True
     image_source_mode: str = "AI Generated"
+    web_video_broll: bool = True
     research_grounding: bool = False
     script_mode: str = "AI Script"
     script_model_mode: str = "Auto Quality"
