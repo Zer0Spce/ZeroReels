@@ -33,6 +33,11 @@ class Scene:
     source_license: str = ""
     source_query: str = ""
     media_type: str = "image"
+    overlay_video_path: str = ""
+    overlay_source_url: str = ""
+    overlay_source_credit: str = ""
+    overlay_source_license: str = ""
+    overlay_source_query: str = ""
 
 
 @dataclass(slots=True)
@@ -61,6 +66,7 @@ class Project:
     visual_qa_summary: str = ""
     image_source_mode: str = "AI Generated"
     web_video_broll: bool = False
+    web_video_overlay: bool = False
     research_context: str = ""
     research_source: str = ""
     script_mode: str = "AI Script"
@@ -110,6 +116,7 @@ class GenerationOptions:
     dynamic_visual_pacing: bool = True
     image_source_mode: str = "AI Generated"
     web_video_broll: bool = True
+    web_video_overlay: bool = True
     research_grounding: bool = False
     script_mode: str = "AI Script"
     script_model_mode: str = "Auto Quality"
