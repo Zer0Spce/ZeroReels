@@ -7,14 +7,11 @@ import subprocess
 from . import services
 from .models import Project
 from .v060_render import _motion_filter, _story_transition_plan
+from .win_subprocess import run_hidden
 
 
 def _real_media_filter(width: int, height: int, frames: int, motion: bool) -> str:
     """Preserve authentic source framing and normalize every archival clip to SAR 1:1."""
-    # The blurred copy fills the delivery canvas. The sharp copy is fully contained, which is
-    # much safer for archival landscape photos, maps and historic documentation.
-    # IMPORTANT: source photos often carry odd pixel-aspect metadata. FFmpeg concat/xfade
-    # requires matching SAR, so the final output is always forced to square pixels.
     base = (
         f"split=2[bg][fg];"
         f"[bg]scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height},"
@@ -25,7 +22,6 @@ def _real_media_filter(width: int, height: int, frames: int, motion: bool) -> st
     )
     if not motion:
         return base + ",setsar=1,fps=30,format=yuv420p"
-    # Restrained 1.5% editorial push keeps authentic photography alive without making it seasick.
     return (
         base
         + f",zoompan=z='min(zoom+0.00012,1.015)':x='iw/2-(iw/zoom/2)':"
@@ -51,7 +47,6 @@ def reality_render_scene_clips(self, project: Project, out_dir: Path, motion: bo
             vf = _real_media_filter(width, height, frames, motion)
             scene.motion_style = "Archival fit + subtle push" if motion else "Archival fit"
         else:
-            # Defense-in-depth for Hybrid mode: force square pixels on AI clips too.
             vf = _motion_filter(scene, width, height, frames, motion) + ",setsar=1"
 
         if i < len(plan):
@@ -71,7 +66,7 @@ def reality_render_scene_clips(self, project: Project, out_dir: Path, motion: bo
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p",
             "-movflags", "+faststart", str(target.resolve()),
         ]
-        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        proc = run_hidden(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if proc.returncode != 0:
             raise RuntimeError(
                 f"FFmpeg could not prepare scene {scene.index}:\n"
@@ -82,11 +77,7 @@ def reality_render_scene_clips(self, project: Project, out_dir: Path, motion: bo
 
 
 def _normalize_final_graph_sar(filtergraph: str) -> str:
-    """Normalize every scene input again before concat/xfade.
-
-    This protects projects created with older clips and catches codec/container SAR metadata that
-    can survive the per-scene render despite identical 1080x1920 dimensions.
-    """
+    """Normalize every scene input again before concat/xfade."""
     return re.sub(
         r"(\[\d+:v\]format=yuv420p)(,setpts=PTS-STARTPTS)",
         r"\1,setsar=1\2",
