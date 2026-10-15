@@ -17,7 +17,17 @@ def test_video_path_detection():
     assert not v090_editor._is_video_path("still.jpg")
 
 
-def test_video_search_filters_non_video_results(monkeypatch):
+def test_video_queries_start_from_spoken_beat_then_broaden():
+    project = Project(topic="Apollo 11", research_context="Apollo 11: Moon landing mission")
+    scene = Scene(index=1, narration="The Saturn V lifts off from Cape Kennedy.", image_prompt="rocket launch", shot_role="Action")
+    queries = v090_editor._video_queries(project, scene)
+    assert queries
+    assert "Apollo 11" in queries[0]
+    assert any("Saturn" in query or "lifts" in query for query in queries[:3])
+    assert queries[-1] == "Apollo 11"
+
+
+def test_video_search_filters_non_video_results_and_keeps_relevant_video(monkeypatch):
     project = Project(topic="Apollo 11", research_context="Apollo 11: Moon landing mission")
     scene = Scene(index=1, narration="The Saturn V lifts off from Cape Kennedy.", image_prompt="launch", shot_role="Action")
 
@@ -33,7 +43,7 @@ def test_video_search_filters_non_video_results(monkeypatch):
                     },
                     "2": {
                         "index": 2,
-                        "title": "File:Apollo launch.webm",
+                        "title": "File:Apollo 11 Saturn V launch.webm",
                         "imageinfo": [{
                             "mime": "video/webm",
                             "url": "https://x/launch.webm",
@@ -51,6 +61,33 @@ def test_video_search_filters_non_video_results(monkeypatch):
     assert page is not None
     assert page["title"].endswith("launch.webm")
     assert "Apollo" in query
+
+
+def test_video_search_rejects_unrelated_video(monkeypatch):
+    project = Project(topic="Apollo 11", research_context="Apollo 11: Moon landing mission")
+    scene = Scene(index=1, narration="The Saturn V lifts off from Cape Kennedy.", image_prompt="launch", shot_role="Action")
+
+    def fake_json(url, timeout=0):
+        return {
+            "query": {
+                "pages": {
+                    "9": {
+                        "index": 1,
+                        "title": "File:Random tropical fish swimming.webm",
+                        "imageinfo": [{
+                            "mime": "video/webm",
+                            "url": "https://x/fish.webm",
+                            "size": 4000000,
+                            "extmetadata": {"ImageDescription": {"value": "Colorful reef fish underwater"}},
+                        }],
+                    }
+                }
+            }
+        }
+
+    monkeypatch.setattr(v090_editor.v071_web_media, "_json", fake_json)
+    page, _ = v090_editor._video_search(project, scene)
+    assert page is None
 
 
 def test_download_video_sets_scene_metadata(tmp_path, monkeypatch):
@@ -90,7 +127,7 @@ def test_download_video_sets_scene_metadata(tmp_path, monkeypatch):
     assert scene.media_type == "video"
     assert scene.source_type == "Wikimedia Commons Video"
     assert scene.source_license == "CC BY 4.0"
-    assert scene.source_query.startswith("Video:")
+    assert scene.source_query.startswith("Topic-matched video:")
 
 
 def test_media_renderer_uses_stream_loop_for_video(tmp_path, monkeypatch):
@@ -123,7 +160,7 @@ def test_media_renderer_uses_stream_loop_for_video(tmp_path, monkeypatch):
     assert "-an" in commands[0]
 
 
-def test_quality_summary_counts_motion_broll():
+def test_quality_summary_counts_topic_broll():
     project = Project(topic="Test")
     project.scenes = [
         Scene(index=1, narration="a", image_prompt="a", source_type="Wikimedia Commons Video", media_type="video"),
@@ -131,6 +168,6 @@ def test_quality_summary_counts_motion_broll():
         Scene(index=3, narration="c", image_prompt="c", source_type="AI Generated"),
     ]
     text = v090_editor._quality_summary(project)
-    assert "1 motion B-roll" in text
+    assert "1 topic-matched B-roll" in text
     assert "1 real stills" in text
     assert "1 AI" in text
