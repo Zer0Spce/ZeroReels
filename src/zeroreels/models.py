@@ -61,6 +61,11 @@ class Project:
     image_source_mode: str = "AI Generated"
     research_context: str = ""
     research_source: str = ""
+    script_mode: str = "AI Script"
+    custom_script: str = ""
+    script_model_mode: str = "Auto Quality"
+    script_model_used: str = ""
+    script_quality_summary: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -103,3 +108,5 @@ class GenerationOptions:
     dynamic_visual_pacing: bool = True
     image_source_mode: str = "AI Generated"
     research_grounding: bool = False
+    script_mode: str = "AI Script"
+    script_model_mode: str = "Auto Quality"
