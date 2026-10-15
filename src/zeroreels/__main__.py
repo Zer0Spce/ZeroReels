@@ -42,6 +42,7 @@ from .v080_ui import install as install_v080_ui
 from .v081_web_fix import install as install_v081_web_fix
 from .v082_natural_voice import install as install_v082_natural_voice
 from .v083_drama3 import install as install_v083_drama3
+from .v090_editor import install as install_v090_editor
 
 
 def main() -> int:
@@ -81,6 +82,7 @@ def main() -> int:
     install_v081_web_fix()
     install_v082_natural_voice()
     install_v083_drama3()
+    install_v090_editor()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
