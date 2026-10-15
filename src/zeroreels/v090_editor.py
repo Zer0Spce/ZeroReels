@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import urllib.parse
@@ -42,22 +43,85 @@ def _video_scene(scene: Scene) -> bool:
     return scene.media_type == "video" or scene.source_type in {"Wikimedia Commons Video", "User Video"} or _is_video_path(scene.image_path)
 
 
-def _video_search(project: Project, scene: Scene) -> tuple[dict, str] | tuple[None, str]:
-    """Return one license-traceable Commons video that follows this exact narration beat."""
-    attempts: list[str] = []
-    queries = v071_web_media.build_image_queries(project, scene)
-    subject = v071_web_media.primary_subject(project)
-    if subject and subject not in queries:
-        queries.append(subject)
+def _tokens(text: str) -> set[str]:
+    return {
+        token.casefold()
+        for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9'’-]{2,}", text or "")
+        if token.casefold() not in v071_web_media.STOPWORDS and len(token) >= 3
+    }
 
-    for query in queries[:5]:
+
+def _video_queries(project: Project, scene: Scene) -> list[str]:
+    """Build scene-first B-roll searches, then broaden safely back to the main topic."""
+    subject = v071_web_media.primary_subject(project)
+    scene_words = v071_web_media._keywords(scene.narration, 7)
+    prompt_words = v071_web_media._keywords(scene.image_prompt, 5)
+    cleaned_topic = v071_web_media._topic_subject(project.topic)
+    candidates: list[str] = []
+
+    # The first searches describe the exact spoken beat, not the full narration sentence.
+    if subject and scene_words:
+        candidates.append(" ".join([subject, *scene_words[:3]]))
+        candidates.append(" ".join([subject, *scene_words[:2]]))
+    if subject and prompt_words:
+        candidates.append(" ".join([subject, *prompt_words[:2]]))
+    if scene_words:
+        candidates.append(" ".join(scene_words[:4]))
+    if subject:
+        candidates.append(subject)
+    if cleaned_topic:
+        candidates.append(cleaned_topic)
+
+    unique: list[str] = []
+    seen: set[str] = set()
+    for candidate in candidates:
+        value = " ".join(candidate.split()).strip()
+        key = value.casefold()
+        if value and key not in seen:
+            seen.add(key)
+            unique.append(value)
+    return unique
+
+
+def _video_page_score(page: dict, project: Project, scene: Scene, query: str) -> int:
+    """Prefer clips whose title/description overlap the actual subject and narration beat."""
+    info = (page.get("imageinfo") or [{}])[0]
+    meta = info.get("extmetadata", {}) or {}
+    description = " ".join([
+        str(page.get("title", "")),
+        v071_web_media._clean_html(str((meta.get("ObjectName") or {}).get("value", ""))),
+        v071_web_media._clean_html(str((meta.get("ImageDescription") or {}).get("value", ""))),
+        v071_web_media._clean_html(str((meta.get("Categories") or {}).get("value", ""))),
+    ])
+    hay = _tokens(description)
+    if not hay:
+        return 0
+    subject_terms = _tokens(v071_web_media.primary_subject(project))
+    scene_terms = _tokens(scene.narration)
+    query_terms = _tokens(query)
+    score = 0
+    score += 5 * len(subject_terms & hay)
+    score += 3 * len(scene_terms & hay)
+    score += 2 * len(query_terms & hay)
+    # Exact phrase-ish title relevance is particularly useful for named people/events.
+    title = str(page.get("title", "")).casefold()
+    subject = v071_web_media.primary_subject(project).casefold().strip()
+    if subject and subject in title:
+        score += 8
+    return score
+
+
+def _video_search(project: Project, scene: Scene) -> tuple[dict, str] | tuple[None, str]:
+    """Return a license-traceable Commons video that actually fits the current narration beat."""
+    attempts: list[str] = []
+    for query in _video_queries(project, scene)[:6]:
         attempts.append(query)
         params = {
             "action": "query",
             "generator": "search",
             "gsrsearch": f"{query} filetype:video",
             "gsrnamespace": 6,
-            "gsrlimit": 30,
+            "gsrlimit": 40,
             "prop": "imageinfo",
             "iiprop": "url|mime|size|extmetadata",
             "format": "json",
@@ -69,7 +133,7 @@ def _video_search(project: Project, scene: Scene) -> tuple[dict, str] | tuple[No
         except Exception:
             continue
         pages = list(data.get("query", {}).get("pages", {}).values())
-        pages.sort(key=lambda item: int(item.get("index", 9999)))
+        ranked: list[tuple[int, int, dict]] = []
         for page in pages:
             info_rows = page.get("imageinfo", []) or []
             if not info_rows:
@@ -82,7 +146,13 @@ def _video_search(project: Project, scene: Scene) -> tuple[dict, str] | tuple[No
             size = int(info.get("size") or 0)
             if size and size > MAX_VIDEO_BYTES:
                 continue
-            return page, query
+            score = _video_page_score(page, project, scene, query)
+            if score < 3:
+                continue
+            ranked.append((score, -int(page.get("index", 9999)), page))
+        if ranked:
+            ranked.sort(key=lambda row: (row[0], row[1]), reverse=True)
+            return ranked[0][2], query
     return None, " | ".join(attempts)
 
 
@@ -101,7 +171,7 @@ def _video_meta(page: dict) -> tuple[str, str, str, str, str]:
 def _download_video(project: Project, scene: Scene, out_dir: Path) -> Path:
     page, query = _video_search(project, scene)
     if page is None:
-        raise RuntimeError(f"No matching Commons B-roll video found: {query or project.topic}")
+        raise RuntimeError(f"No topic-matched Commons B-roll video found: {query or project.topic}")
     direct, page_url, credit, license_name, mime = _video_meta(page)
     if not direct or mime not in VIDEO_MIMES:
         raise RuntimeError("Commons returned an unsupported B-roll video")
@@ -128,10 +198,10 @@ def _download_video(project: Project, scene: Scene, out_dir: Path) -> Path:
     scene.source_url = page_url or direct
     scene.source_credit = credit or v071_web_media._clean_html(str(page.get("title", "")))
     scene.source_license = license_name or "See source page"
-    scene.source_query = f"Video: {query}"
+    scene.source_query = f"Topic-matched video: {query}"
     scene.quality_score = 100
     scene.quality_notes = [
-        f"authentic motion B-roll • {scene.source_license}",
+        f"topic-matched motion B-roll • {scene.source_license}",
         f"credit: {scene.source_credit or 'see source page'}",
     ]
     scene.status = "image-ready"
@@ -139,7 +209,7 @@ def _download_video(project: Project, scene: Scene, out_dir: Path) -> Path:
 
 
 class WikimediaMediaService(v071_web_media.WikimediaImageService):
-    """Prefer a few real motion clips, then fall back to the proven Commons still-image path."""
+    """Use a few scene-matched real videos, then the proven Commons still-image path."""
 
     def __init__(self, project: Project):
         super().__init__(project)
@@ -163,8 +233,8 @@ class WikimediaMediaService(v071_web_media.WikimediaImageService):
                 self.video_count += 1
                 return result
             except Exception:
-                # Motion footage is an enhancement, never a reason to fail an otherwise valid
-                # real-media project. Fall through to the mature Commons still-image resolver.
+                # A weak/missing video match is not accepted and never kills the project.
+                # Fall back to a relevant still rather than forcing unrelated motion footage.
                 pass
         result = super().generate(scene, out_dir, fmt)
         scene.media_type = "image"
@@ -196,7 +266,7 @@ def render_media_scene_clips(self, project: Project, out_dir: Path, motion: bool
 
         if _video_scene(scene):
             scene.media_type = "video"
-            scene.motion_style = "Authentic B-roll motion"
+            scene.motion_style = "Topic-matched authentic B-roll"
             vf = _video_cover_filter(width, height)
             cmd = [
                 ffmpeg, "-y", "-stream_loop", "-1", "-i", str(source_path),
@@ -204,7 +274,7 @@ def render_media_scene_clips(self, project: Project, out_dir: Path, motion: bool
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p",
                 "-movflags", "+faststart", str(target.resolve()),
             ]
-            source_label = "B-roll video"
+            source_label = "topic B-roll video"
         else:
             scene.media_type = "image"
             if scene.source_type in {"Wikimedia Commons", "User Image"}:
@@ -248,7 +318,7 @@ def _quality_summary(project: Project) -> str:
     user = total - real_video - real_image - ai
     parts = [f"{total - warnings}/{total} visuals ready"]
     if real_video:
-        parts.append(f"{real_video} motion B-roll")
+        parts.append(f"{real_video} topic-matched B-roll")
     if real_image:
         parts.append(f"{real_image} real stills")
     if ai:
@@ -418,10 +488,10 @@ def install() -> None:
         quality = getattr(self, "create_quality_card", None)
         grid = quality.layout() if quality is not None else None
         if grid is not None and hasattr(grid, "addWidget"):
-            self.web_video_broll_check = QCheckBox("Authentic B-roll video when available")
+            self.web_video_broll_check = QCheckBox("Topic-matched real B-roll video")
             self.web_video_broll_check.setChecked(True)
             self.web_video_broll_check.setToolTip(
-                "Real/Hybrid modes can use a few relevant Wikimedia Commons video clips instead of making every visual a moving still. Source/credit/license are saved normally."
+                "Real/Hybrid mode searches Wikimedia Commons video for the exact spoken beat. Weak matches are rejected and fall back to a relevant still instead. Source, credit and license are saved automatically."
             )
             grid.addWidget(self.web_video_broll_check, 17, 0, 1, 2)
 
