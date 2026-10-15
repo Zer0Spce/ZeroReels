@@ -39,6 +39,7 @@ from .v080_script import install as install_v080_script
 from .v080_pipeline import install as install_v080_pipeline
 from .v080_render import install as install_v080_render
 from .v080_ui import install as install_v080_ui
+from .v081_web_fix import install as install_v081_web_fix
 
 
 def main() -> int:
@@ -75,6 +76,7 @@ def main() -> int:
     install_v080_pipeline()
     install_v080_render()
     install_v080_ui()
+    install_v081_web_fix()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
