@@ -4,13 +4,14 @@ kokoro_datas, kokoro_bins, kokoro_hidden = collect_all("kokoro_onnx")
 espeak_datas, espeak_bins, espeak_hidden = collect_all("espeakng_loader")
 phon_datas, phon_bins, phon_hidden = collect_all("phonemizer")
 ff_datas, ff_bins, ff_hidden = collect_all("imageio_ffmpeg")
+playwright_datas, playwright_bins, playwright_hidden = collect_all("playwright")
 
 a = Analysis(
     ["launcher.py"],
     pathex=["src"],
-    binaries=kokoro_bins + espeak_bins + phon_bins + ff_bins,
-    datas=kokoro_datas + espeak_datas + phon_datas + ff_datas + [("assets/zeroreels.ico", "assets")],
-    hiddenimports=kokoro_hidden + espeak_hidden + phon_hidden + ff_hidden,
+    binaries=kokoro_bins + espeak_bins + phon_bins + ff_bins + playwright_bins,
+    datas=kokoro_datas + espeak_datas + phon_datas + ff_datas + playwright_datas + [("assets/zeroreels.ico", "assets")],
+    hiddenimports=kokoro_hidden + espeak_hidden + phon_hidden + ff_hidden + playwright_hidden,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
