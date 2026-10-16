@@ -43,6 +43,7 @@ from .v083_drama3 import install as install_v083_drama3
 from .v090_editor import install as install_v090_editor
 from .v100_story_media import install as install_v100_story_media
 from .v111_browser import install as install_v111_browser
+from .v111_polish import install as install_v111_polish
 
 
 def main() -> int:
@@ -84,6 +85,7 @@ def main() -> int:
     install_v090_editor()
     install_v100_story_media()
     install_v111_browser()
+    install_v111_polish()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
