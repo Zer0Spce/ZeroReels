@@ -5,6 +5,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from . import ui
+from .branding import app_icon
 from .ui import MainWindow
 from .live_setup import install as install_live_setup
 from .model_browse import install as install_model_browse
@@ -35,15 +36,14 @@ from .v071_render import install as install_v071_render
 from .v071_ui import install as install_v071_ui
 from .v074_setup_fix import install as install_v074_setup_fix
 from .v075_voice_fix import install as install_v075_voice_fix
-from .v080_script import install as install_v080_script
-from .v080_pipeline import install as install_v080_pipeline
 from .v080_render import install as install_v080_render
-from .v080_ui import install as install_v080_ui
 from .v081_web_fix import install as install_v081_web_fix
 from .v082_natural_voice import install as install_v082_natural_voice
 from .v083_drama3 import install as install_v083_drama3
 from .v090_editor import install as install_v090_editor
 from .v100_story_media import install as install_v100_story_media
+from .v110_cloud import install as install_v110_cloud
+from .v110_fix import install as install_v110_fix
 
 
 def main() -> int:
@@ -76,22 +76,26 @@ def main() -> int:
     install_v071_ui()
     install_v074_setup_fix()
     install_v075_voice_fix()
-    install_v080_script()
-    install_v080_pipeline()
+    # v0.8 Story Director/Ollama writers are intentionally no longer installed.
+    # v0.11 uses OpenAI directly for scripting and keeps Custom Script as the bypass.
     install_v080_render()
-    install_v080_ui()
     install_v081_web_fix()
     install_v082_natural_voice()
     install_v083_drama3()
     install_v090_editor()
     install_v100_story_media()
+    install_v110_cloud()
+    install_v110_fix()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
     app.setOrganizationName("ZeroReels")
     app.setStyle("Fusion")
     app.setStyleSheet(ui.build_stylesheet())
+    icon = app_icon()
+    app.setWindowIcon(icon)
     window = MainWindow()
+    window.setWindowIcon(icon)
     if "--smoke-test" in sys.argv:
         window.close()
         return 0
