@@ -8,7 +8,6 @@ from . import browser_ai, browser_sessions, ui, v111_browser
 
 
 _ORIGINAL_DETECT_AUTH = browser_sessions.detect_auth
-_ORIGINAL_SIDEBAR = ui.MainWindow._sidebar
 
 CHATGPT_COMPOSERS = (
     "#prompt-textarea",
@@ -124,16 +123,16 @@ def _ensure_ready(self):
     if status in {"needs-login", "human-verification"}:
         raise RuntimeError(message)
 
-    # An "unknown" auth result is not a hard failure anymore. ChatGPT frequently renders
-    # the shell first and mounts the composer several seconds later. The editor itself is
-    # the final usability check, and anonymous/free sessions can also expose it legitimately.
+    # Do not abort on an inconclusive account-marker check. ChatGPT often mounts the page
+    # shell first and the actual message editor several seconds later. The editor is the
+    # capability ZeroReels really needs, and it can legitimately exist for a free session.
     try:
         _wait_for_composer(self, 25000)
         return
     except Exception:
         pass
 
-    # One clean navigation handles stale service-worker shells and partially hydrated tabs.
+    # A clean navigation handles stale service-worker shells and half-hydrated restored tabs.
     page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=45000)
     status, message = detect_auth_v112("chatgpt", page, 12000)
     if status in {"needs-login", "human-verification"}:
@@ -143,7 +142,7 @@ def _ensure_ready(self):
         return
     except Exception as exc:
         raise RuntimeError(
-            "ChatGPT opened, but its message editor never became ready. Open Settings → Browser Accounts → ChatGPT → Open, confirm the normal ChatGPT page works, then retry."
+            "ChatGPT opened, but its message editor never became ready. Open Settings → Browser Accounts → ChatGPT → Open, confirm the normal ChatGPT page works, dismiss any welcome/update dialog, then retry."
         ) from exc
 
 
@@ -155,19 +154,14 @@ def test_session_v112(service_id: str) -> dict:
             base = service.url.split("/app/")[0]
             if not (page.url or "").startswith(base):
                 page.goto(service.url, wait_until="domcontentloaded", timeout=45000)
-            elif service_id == "chatgpt":
-                # Avoid an immediate reload: the existing tab may already be hydrating the
-                # current ChatGPT shell, and reloading used to restart that process before
-                # the old 900 ms detector ran.
-                pass
-            else:
+            elif service_id != "chatgpt":
                 page.reload(wait_until="domcontentloaded", timeout=45000)
 
             if service_id == "chatgpt":
+                # The old v0.11.1 path reloaded the tab, waited only ~900 ms, and then checked
+                # two selectors. Keep the existing tab alive and allow the modern UI to hydrate.
                 status, message = detect_auth_v112("chatgpt", page, 18000)
                 if status == "unknown":
-                    # Test the actual capability ZeroReels needs instead of treating an
-                    # inconclusive account-marker probe as a login failure.
                     try:
                         locator = page.locator(",".join(f"{s}:visible" for s in CHATGPT_COMPOSERS)).first
                         locator.wait_for(state="visible", timeout=20000)
@@ -193,18 +187,8 @@ def test_session_v112(service_id: str) -> dict:
     return {"ok": status == "verified", "status": status, "message": message}
 
 
-def sidebar_v112(self):
-    frame = _ORIGINAL_SIDEBAR(self)
-    for label in frame.findChildren(QLabel):
-        if label.text().startswith("v0."):
-            label.setText("v0.11.2 BROWSER")
-            label.setMaximumWidth(152)
-            break
-    return frame
-
-
 def install() -> None:
-    # Keep all consumers on the same readiness logic. browser_ai imported detect_auth by
+    # Keep every consumer on the same readiness logic. browser_ai imported detect_auth by
     # value, and v111_browser imported test_session by value, so patch both references.
     browser_sessions.detect_auth = detect_auth_v112
     browser_sessions.test_session = test_session_v112
@@ -213,4 +197,17 @@ def install() -> None:
     browser_ai.ChatGPTBrowserClient._composer = _composer
     browser_ai.ChatGPTBrowserClient._ensure_ready = _ensure_ready
     v111_browser.test_session = test_session_v112
+
+    # Preserve every v0.11.1 sidebar/UI patch already installed and only update the badge.
+    previous_sidebar = ui.MainWindow._sidebar
+
+    def sidebar_v112(self):
+        frame = previous_sidebar(self)
+        for label in frame.findChildren(QLabel):
+            if label.text().startswith("v0."):
+                label.setText("v0.11.2 BROWSER")
+                label.setMaximumWidth(152)
+                break
+        return frame
+
     ui.MainWindow._sidebar = sidebar_v112
