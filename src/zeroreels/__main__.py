@@ -51,6 +51,7 @@ from .v115_playwright_lifecycle import install as install_v115_playwright_lifecy
 from .v116_integrity_chat import install as install_v116_integrity_chat
 from .v117_elevenlabs_editor import install as install_v117_elevenlabs_editor
 from .v118_elevenlabs_paste import install as install_v118_elevenlabs_paste
+from .v119_elevenlabs_document import install as install_v119_elevenlabs_document
 
 
 def main() -> int:
@@ -99,6 +100,7 @@ def main() -> int:
     install_v116_integrity_chat()
     install_v117_elevenlabs_editor()
     install_v118_elevenlabs_paste()
+    install_v119_elevenlabs_document()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
