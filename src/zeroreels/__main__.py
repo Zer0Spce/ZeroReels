@@ -49,6 +49,7 @@ from .v113_chatgpt_response import install as install_v113_chatgpt_response
 from .v114_json_capture import install as install_v114_json_capture
 from .v115_playwright_lifecycle import install as install_v115_playwright_lifecycle
 from .v116_integrity_chat import install as install_v116_integrity_chat
+from .v117_elevenlabs_editor import install as install_v117_elevenlabs_editor
 
 
 def main() -> int:
@@ -95,6 +96,7 @@ def main() -> int:
     install_v114_json_capture()
     install_v115_playwright_lifecycle()
     install_v116_integrity_chat()
+    install_v117_elevenlabs_editor()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
