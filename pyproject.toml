@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zeroreels"
-version = "0.11.0"
-description = "AI short-form video automation for Windows with OpenAI, ElevenLabs, local AI, and automatic B-roll"
+version = "0.11.1"
+description = "AI short-form video automation for Windows using browser-based ChatGPT and ElevenLabs, local AI, and automatic B-roll"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = {text = "MIT"}
@@ -14,6 +14,7 @@ dependencies = [
   "imageio-ffmpeg>=0.5,<1",
   "kokoro-onnx>=0.5,<1",
   "soundfile>=0.13,<1",
+  "playwright>=1.55,<2",
 ]
 
 [project.optional-dependencies]
