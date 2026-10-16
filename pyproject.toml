@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zeroreels"
-version = "0.11.2"
+version = "0.11.3"
 description = "AI short-form video automation for Windows using browser-based ChatGPT and ElevenLabs, local AI, and automatic B-roll"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
