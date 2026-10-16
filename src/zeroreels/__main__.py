@@ -44,6 +44,7 @@ from .v090_editor import install as install_v090_editor
 from .v100_story_media import install as install_v100_story_media
 from .v111_browser import install as install_v111_browser
 from .v111_polish import install as install_v111_polish
+from .v112_chatgpt_auth import install as install_v112_chatgpt_auth
 
 
 def main() -> int:
@@ -76,8 +77,7 @@ def main() -> int:
     install_v071_ui()
     install_v074_setup_fix()
     install_v075_voice_fix()
-    # Ollama/Story Director and API-key cloud integrations are intentionally not installed.
-    # v0.11.1 drives normal ChatGPT and ElevenLabs web accounts through ZeroReels Chrome profiles.
+    # Browser-first workflow: normal ChatGPT and ElevenLabs sites through ZeroReels profiles.
     install_v080_render()
     install_v081_web_fix()
     install_v082_natural_voice()
@@ -86,6 +86,7 @@ def main() -> int:
     install_v100_story_media()
     install_v111_browser()
     install_v111_polish()
+    install_v112_chatgpt_auth()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
