@@ -9,7 +9,7 @@ a = Analysis(
     ["launcher.py"],
     pathex=["src"],
     binaries=kokoro_bins + espeak_bins + phon_bins + ff_bins,
-    datas=kokoro_datas + espeak_datas + phon_datas + ff_datas,
+    datas=kokoro_datas + espeak_datas + phon_datas + ff_datas + [("assets/zeroreels.ico", "assets")],
     hiddenimports=kokoro_hidden + espeak_hidden + phon_hidden + ff_hidden,
     hookspath=[],
     hooksconfig={},
@@ -35,6 +35,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon="assets/zeroreels.ico",
 )
 coll = COLLECT(
     exe,

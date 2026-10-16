@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zeroreels"
-version = "0.10.0"
-description = "Free local-first AI short-form video automation for Windows"
+version = "0.11.0"
+description = "AI short-form video automation for Windows with OpenAI, ElevenLabs, local AI, and automatic B-roll"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 license = {text = "MIT"}
@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<9", "pyinstaller>=6.10,<7"]
+dev = ["pytest>=8,<9", "pyinstaller>=6.10,<7", "pillow>=10,<13"]
 
 [project.scripts]
 zeroreels = "zeroreels.__main__:main"
