@@ -46,6 +46,7 @@ from .v111_browser import install as install_v111_browser
 from .v111_polish import install as install_v111_polish
 from .v112_chatgpt_auth import install as install_v112_chatgpt_auth
 from .v113_chatgpt_response import install as install_v113_chatgpt_response
+from .v114_json_capture import install as install_v114_json_capture
 
 
 def main() -> int:
@@ -89,6 +90,7 @@ def main() -> int:
     install_v111_polish()
     install_v112_chatgpt_auth()
     install_v113_chatgpt_response()
+    install_v114_json_capture()
 
     app = QApplication(sys.argv)
     app.setApplicationName("ZeroReels")
