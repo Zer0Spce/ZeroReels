@@ -10,16 +10,12 @@ from PySide6.QtWidgets import QCheckBox, QGridLayout, QLabel
 from . import browser_ai, browser_sessions, pipeline, services, ui, v070_voice, v114_json_capture
 
 
-_PREVIOUS_PIPELINE_RUN = pipeline.Pipeline.run
-_PREVIOUS_CREATE_PAGE = ui.MainWindow._create_page
-_PREVIOUS_MAKE_PROJECT = ui.MainWindow._make_project
-_PREVIOUS_SCENE_CLIPS = services.FFmpegRenderer._render_scene_clips
-_PREVIOUS_RENDER = services.FFmpegRenderer.render
+_PREVIOUS_PIPELINE_RUN = None
+_PREVIOUS_CREATE_PAGE = None
+_PREVIOUS_MAKE_PROJECT = None
+_PREVIOUS_SCENE_CLIPS = None
+_PREVIOUS_RENDER = None
 
-
-# ---------------------------------------------------------------------------
-# ChatGPT conversation reuse
-# ---------------------------------------------------------------------------
 
 def _saved_chat_url() -> str:
     try:
@@ -55,24 +51,16 @@ def _ensure_chat_context(client) -> None:
     client.open()
     ready = bool(getattr(browser_ai._thread, "chat_context_ready", False))
     chat_url = str(getattr(browser_ai._thread, "chat_url", "") or "")
-
-    # After the ChatGPT -> ElevenLabs lifecycle handoff, Playwright is intentionally
-    # restarted. Return to the reel's remembered conversation instead of silently
-    # opening a fresh chat.
     if ready:
         if chat_url and client.page.url != chat_url:
             client.page.goto(chat_url, wait_until="domcontentloaded", timeout=45000)
             client._ensure_ready()
         return
-
     if bool(getattr(browser_ai._thread, "chat_new_requested", False)):
-        # "New Chat" means one new conversation for the reel, NOT a new chat for every
-        # script/tag/image request. Later requests reuse the conversation URL created here.
         client.new_chat()
     elif chat_url and client.page.url != chat_url:
         client.page.goto(chat_url, wait_until="domcontentloaded", timeout=45000)
         client._ensure_ready()
-
     browser_ai._thread.chat_context_ready = True
     _remember_chat_url(client)
 
@@ -94,7 +82,6 @@ def _generate_image_reuse(self, prompt: str, out_base: Path, *, timeout_ms: int 
         )
     except Exception:
         baseline_sources = set()
-
     self.image_candidates = []
     self._generation_started = time.time()
     request = (
@@ -102,7 +89,6 @@ def _generate_image_reuse(self, prompt: str, out_base: Path, *, timeout_ms: int 
         + prompt
         + "\n\nNo captions, no visible UI, no watermark, no logo, and avoid accidental readable text unless specifically required."
     )
-
     started = time.time()
     deadline = started + max(60.0, timeout_ms / 1000.0)
     candidate_since: float | None = None
@@ -120,7 +106,6 @@ def _generate_image_reuse(self, prompt: str, out_base: Path, *, timeout_ms: int 
                     candidate_since = now
                 if not v114_json_capture._stop_visible(self.page) or now - candidate_since >= 4.0:
                     return v114_json_capture._save_image_candidate(out_base, best)
-
             if now >= next_dom_probe:
                 dom = self._dom_image_bytes(self.page.locator("body"), baseline_sources)
                 if dom:
@@ -135,17 +120,12 @@ def _generate_image_reuse(self, prompt: str, out_base: Path, *, timeout_ms: int 
     finally:
         self._generation_started = 0.0
         _remember_chat_url(self)
-
     tail = v114_json_capture._norm(last_body or v114_json_capture._body_text(self.page, limit=40_000))[-700:]
     raise RuntimeError(
         "ChatGPT did not expose a generated image before the browser timeout. "
         f"Current page: {self.page.url}. Visible page tail: {tail or 'no readable page text'}"
     )
 
-
-# ---------------------------------------------------------------------------
-# ElevenLabs: insert and verify the ENTIRE performance script
-# ---------------------------------------------------------------------------
 
 def _editor_text(editor) -> str:
     try:
@@ -168,8 +148,6 @@ def _eleven_script_complete(expected: str, actual: str) -> bool:
     actual_words = _spoken_signature(actual)
     if not expected_words or expected_words != actual_words:
         return False
-    # Also require the end of the script to be present. This catches editors that report
-    # duplicated/virtualized text oddly while only accepting the first paragraph.
     expected_tail = " ".join(expected_words[-10:])
     actual_text = " ".join(actual_words)
     return not expected_tail or actual_text.endswith(expected_tail)
@@ -185,7 +163,7 @@ def _best_eleven_editor(client):
         '[contenteditable="true"]',
     ]
     candidates = []
-    for selector in selectors:
+    for priority, selector in enumerate(selectors):
         locator = client.page.locator(f"{selector}:visible")
         try:
             count = locator.count()
@@ -200,7 +178,7 @@ def _best_eleven_editor(client):
                 area = float(box.get("width", 0)) * float(box.get("height", 0))
                 if area < 20_000:
                     continue
-                candidates.append((area, -selectors.index(selector), item))
+                candidates.append((area, -priority, item))
             except Exception:
                 continue
     if not candidates:
@@ -217,8 +195,6 @@ def _insert_full_eleven_script(client, text: str):
         client.page.wait_for_timeout(350)
         return _eleven_script_complete(text, _editor_text(editor))
 
-    # First choice: real keyboard insertion. Rich text editors (Lexical/ProseMirror) are
-    # much more reliable with one insertText operation than locator.fill/press_sequentially.
     try:
         editor.click()
         editor.press("Control+A")
@@ -228,16 +204,12 @@ def _insert_full_eleven_script(client, text: str):
             return editor
     except Exception:
         pass
-
-    # Native textarea fallback.
     try:
         editor.fill(text)
         if verify():
             return editor
     except Exception:
         pass
-
-    # Contenteditable fallback that emits the input/change events used by React editors.
     try:
         editor.evaluate(
             """
@@ -262,7 +234,6 @@ def _insert_full_eleven_script(client, text: str):
             return editor
     except Exception:
         pass
-
     expected = len(_spoken_signature(text))
     actual = len(_spoken_signature(_editor_text(editor)))
     raise RuntimeError(
@@ -276,9 +247,7 @@ def _eleven_render_verified(self, text: str, out_dir: Path, *, timeout_ms: int =
     self.open()
     if "/speech-synthesis" not in self.page.url:
         self.page.goto(self.URL, wait_until="domcontentloaded", timeout=45000)
-
     _insert_full_eleven_script(self, text)
-
     button = self._generate_button()
     button.wait_for(state="visible", timeout=15000)
     self.audio_candidates = []
@@ -290,14 +259,12 @@ def _eleven_render_verified(self, text: str, out_dir: Path, *, timeout_ms: int =
             break
         time.sleep(0.5)
     self._capture = False
-
     out_dir.mkdir(parents=True, exist_ok=True)
     if self.audio_candidates:
         best = self.audio_candidates[0]
         target = out_dir / f"elevenlabs_browser{best['ext']}"
         target.write_bytes(best["body"])
         return target
-
     download_button = self.page.locator(
         'button[aria-label*="download" i]:visible,button[title*="download" i]:visible,button:visible:has-text("Download")'
     ).first
@@ -325,8 +292,6 @@ def _eleven_render_verified(self, text: str, out_dir: Path, *, timeout_ms: int =
 
 
 def _minimum_plausible_narration_seconds(spoken_words: int) -> float:
-    # 300 WPM is already extremely fast. Anything materially shorter almost certainly
-    # means ElevenLabs received only part of the intended script.
     return max(2.0, spoken_words / 5.0)
 
 
@@ -359,7 +324,6 @@ def _voice_generate_verified(self, project, out_dir: Path, progress=None) -> Pat
                 "Could not convert ElevenLabs browser audio to WAV: "
                 + proc.stderr.decode("utf-8", errors="replace")[-1200:]
             )
-
     duration = v070_voice._wav_duration(target)
     spoken_words = len(_spoken_signature(text))
     minimum = _minimum_plausible_narration_seconds(spoken_words)
@@ -373,7 +337,6 @@ def _voice_generate_verified(self, project, out_dir: Path, progress=None) -> Pat
             f"A complete read should be at least about {minimum:.1f}s even at very fast speech. "
             "ZeroReels stopped before scene timing/render because the TTS result appears truncated."
         )
-
     v070_voice.apply_scene_timing(project, duration, self.delivery)
     project.actual_seconds = round(duration, 2)
     project.voice_engine_used = browser_ai.ELEVEN_BROWSER_ENGINE
@@ -382,10 +345,6 @@ def _voice_generate_verified(self, project, out_dir: Path, progress=None) -> Pat
         progress(29, f"ElevenLabs browser narration verified • {spoken_words} words • {duration:.1f}s")
     return target
 
-
-# ---------------------------------------------------------------------------
-# Renderer integrity: every scene must become one clip and final duration must agree
-# ---------------------------------------------------------------------------
 
 def _verify_clip_set(project, clips: list[Path]) -> list[Path]:
     expected = len(project.scenes)
@@ -424,8 +383,6 @@ def _render_verified(self, project, audio, captions, out_dir, *args, **kwargs):
     video_path = Path(video)
     final_seconds = _probe_duration(self._ffmpeg(), video_path)
     expected_seconds = sum(max(0.0, float(scene.duration)) for scene in project.scenes)
-    # Crossfades can shorten the visual program slightly, but never remotely enough to turn
-    # a 60-second reel into a 6.8-second file. Refuse to call a truncated movie successful.
     if expected_seconds >= 4 and final_seconds and final_seconds < expected_seconds * 0.72:
         try:
             video_path.rename(video_path.with_name("final_INCOMPLETE.mp4"))
@@ -435,7 +392,6 @@ def _render_verified(self, project, audio, captions, out_dir, *args, **kwargs):
             f"Render integrity check failed: final movie is {final_seconds:.1f}s but the prepared scene timeline is "
             f"{expected_seconds:.1f}s across {len(project.scenes)} scenes. The incomplete output was not accepted as final.mp4."
         )
-
     try:
         manifest = Path(out_dir) / "RENDER_MANIFEST.txt"
         lines = [
@@ -453,10 +409,6 @@ def _render_verified(self, project, audio, captions, out_dir, *args, **kwargs):
         pass
     return video, burned
 
-
-# ---------------------------------------------------------------------------
-# UI + pipeline integration
-# ---------------------------------------------------------------------------
 
 def _create_page_v116(self):
     page = _PREVIOUS_CREATE_PAGE(self)
@@ -497,15 +449,21 @@ def _pipeline_run_v116(self, project, options, progress=lambda value, text: None
 
 
 def install() -> None:
+    global _PREVIOUS_PIPELINE_RUN, _PREVIOUS_CREATE_PAGE, _PREVIOUS_MAKE_PROJECT
+    global _PREVIOUS_SCENE_CLIPS, _PREVIOUS_RENDER
+    _PREVIOUS_PIPELINE_RUN = pipeline.Pipeline.run
+    _PREVIOUS_CREATE_PAGE = ui.MainWindow._create_page
+    _PREVIOUS_MAKE_PROJECT = ui.MainWindow._make_project
+    _PREVIOUS_SCENE_CLIPS = services.FFmpegRenderer._render_scene_clips
+    _PREVIOUS_RENDER = services.FFmpegRenderer.render
+
     browser_ai.ChatGPTBrowserClient.ask_json = _ask_json_reuse
     browser_ai.ChatGPTBrowserClient.generate_image = _generate_image_reuse
     browser_ai.ElevenLabsBrowserClient.render = _eleven_render_verified
     browser_ai.ElevenLabsBrowserVoiceService.generate = _voice_generate_verified
-
     services.FFmpegRenderer._render_scene_clips = _scene_clips_verified
     services.FFmpegRenderer.render = _render_verified
     pipeline.Pipeline.run = _pipeline_run_v116
-
     ui.MainWindow._create_page = _create_page_v116
     ui.MainWindow._make_project = _make_project_v116
 
