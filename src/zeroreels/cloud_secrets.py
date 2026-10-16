@@ -11,11 +11,9 @@ _FALLBACK_FILE = APP_DIR / "cloud_secrets.json"
 _PREFIX = "ZeroReels/"
 
 
-def _windows_read(target: str) -> str:
+def _credential_api():
     import ctypes
     from ctypes import wintypes
-
-    CRED_TYPE_GENERIC = 1
 
     class CREDENTIALW(ctypes.Structure):
         _fields_ = [
@@ -25,7 +23,7 @@ def _windows_read(target: str) -> str:
             ("Comment", wintypes.LPWSTR),
             ("LastWritten", wintypes.FILETIME),
             ("CredentialBlobSize", wintypes.DWORD),
-            ("CredentialBlob", ctypes.POINTER(ctypes.c_byte)),
+            ("CredentialBlob", ctypes.POINTER(ctypes.c_ubyte)),
             ("Persist", wintypes.DWORD),
             ("AttributeCount", wintypes.DWORD),
             ("Attributes", ctypes.c_void_p),
@@ -33,64 +31,63 @@ def _windows_read(target: str) -> str:
             ("UserName", wintypes.LPWSTR),
         ]
 
-    pcred = ctypes.POINTER(CREDENTIALW)()
-    advapi32 = ctypes.WinDLL("Advapi32.dll")
-    if not advapi32.CredReadW(target, CRED_TYPE_GENERIC, 0, ctypes.byref(pcred)):
+    PCREDENTIALW = ctypes.POINTER(CREDENTIALW)
+    api = ctypes.WinDLL("Advapi32.dll", use_last_error=True)
+    api.CredReadW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.POINTER(PCREDENTIALW)]
+    api.CredReadW.restype = wintypes.BOOL
+    api.CredWriteW.argtypes = [PCREDENTIALW, wintypes.DWORD]
+    api.CredWriteW.restype = wintypes.BOOL
+    api.CredDeleteW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD]
+    api.CredDeleteW.restype = wintypes.BOOL
+    api.CredFree.argtypes = [ctypes.c_void_p]
+    api.CredFree.restype = None
+    return ctypes, api, CREDENTIALW, PCREDENTIALW
+
+
+def _windows_read(target: str) -> str:
+    ctypes, api, _credential, PCREDENTIALW = _credential_api()
+    CRED_TYPE_GENERIC = 1
+    pcred = PCREDENTIALW()
+    if not api.CredReadW(target, CRED_TYPE_GENERIC, 0, ctypes.byref(pcred)):
         return ""
     try:
         cred = pcred.contents
         if not cred.CredentialBlob or not cred.CredentialBlobSize:
             return ""
         raw = ctypes.string_at(cred.CredentialBlob, cred.CredentialBlobSize)
-        return raw.decode("utf-16-le", errors="ignore").rstrip("\x00")
+        return raw.decode("utf-16-le", errors="strict").rstrip("\x00")
     finally:
-        advapi32.CredFree(pcred)
+        api.CredFree(pcred)
 
 
 def _windows_write(target: str, value: str) -> None:
-    import ctypes
-    from ctypes import wintypes
-
+    ctypes, api, CREDENTIALW, _pcredential = _credential_api()
     CRED_TYPE_GENERIC = 1
     CRED_PERSIST_LOCAL_MACHINE = 2
 
-    class CREDENTIALW(ctypes.Structure):
-        _fields_ = [
-            ("Flags", wintypes.DWORD),
-            ("Type", wintypes.DWORD),
-            ("TargetName", wintypes.LPWSTR),
-            ("Comment", wintypes.LPWSTR),
-            ("LastWritten", wintypes.FILETIME),
-            ("CredentialBlobSize", wintypes.DWORD),
-            ("CredentialBlob", ctypes.POINTER(ctypes.c_byte)),
-            ("Persist", wintypes.DWORD),
-            ("AttributeCount", wintypes.DWORD),
-            ("Attributes", ctypes.c_void_p),
-            ("TargetAlias", wintypes.LPWSTR),
-            ("UserName", wintypes.LPWSTR),
-        ]
-
     blob = value.encode("utf-16-le")
-    buf = ctypes.create_string_buffer(blob)
+    # Credential Manager accepts a byte blob; retain this buffer until CredWriteW returns.
+    buf = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
     cred = CREDENTIALW()
     cred.Type = CRED_TYPE_GENERIC
     cred.TargetName = target
     cred.CredentialBlobSize = len(blob)
-    cred.CredentialBlob = ctypes.cast(buf, ctypes.POINTER(ctypes.c_byte))
+    cred.CredentialBlob = ctypes.cast(buf, ctypes.POINTER(ctypes.c_ubyte))
     cred.Persist = CRED_PERSIST_LOCAL_MACHINE
     cred.UserName = "ZeroReels"
     cred.Comment = "ZeroReels cloud API credential"
-    advapi32 = ctypes.WinDLL("Advapi32.dll")
-    if not advapi32.CredWriteW(ctypes.byref(cred), 0):
+    if not api.CredWriteW(ctypes.byref(cred), 0):
         raise OSError(ctypes.get_last_error(), "Windows Credential Manager rejected the credential")
 
 
 def _windows_delete(target: str) -> None:
-    import ctypes
-
+    ctypes, api, _credential, _pcredential = _credential_api()
     CRED_TYPE_GENERIC = 1
-    advapi32 = ctypes.WinDLL("Advapi32.dll")
-    advapi32.CredDeleteW(target, CRED_TYPE_GENERIC, 0)
+    if not api.CredDeleteW(target, CRED_TYPE_GENERIC, 0):
+        error = ctypes.get_last_error()
+        # ERROR_NOT_FOUND means there was simply nothing to remove.
+        if error not in {0, 1168}:
+            raise OSError(error, "Windows Credential Manager could not delete the credential")
 
 
 def _fallback_load() -> dict[str, str]:
