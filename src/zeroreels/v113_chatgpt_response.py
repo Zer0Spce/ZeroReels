@@ -7,7 +7,6 @@ from PySide6.QtWidgets import QLabel
 from . import browser_ai, browser_sessions, ui
 
 
-TURN_QUERY = '[data-message-author-role],[data-testid^="conversation-turn-"],main article'
 STOP_QUERY = 'button[data-testid="stop-button"]:visible,button[aria-label*="stop" i]:visible'
 SEND_QUERY = 'button[data-testid="send-button"]:visible,button[data-testid*="send" i]:visible,button[aria-label*="send" i]:visible'
 
@@ -23,10 +22,11 @@ def _looks_like_prompt(text: str, prompt: str) -> bool:
         return False
     if text_n == prompt_n:
         return True
-    probe = prompt_n[:220]
-    if len(probe) >= 80 and probe in text_n:
+    # ChatGPT may collapse a long user turn in the rendered UI. A reasonably distinctive
+    # prefix is enough to keep that user turn from being mistaken for the assistant answer.
+    if len(text_n) >= 28 and text_n[:160] in prompt_n:
         return True
-    if len(text_n) >= 80 and text_n[:220] in prompt_n:
+    if len(prompt_n) >= 28 and prompt_n[:160] in text_n:
         return True
     return False
 
@@ -34,7 +34,9 @@ def _looks_like_prompt(text: str, prompt: str) -> bool:
 def _snapshot_turns(page) -> list[dict]:
     script = r'''
     () => {
-      const raw = Array.from(document.querySelectorAll('[data-message-author-role],[data-testid^="conversation-turn-"],main article'));
+      const raw = Array.from(document.querySelectorAll(
+        '[data-message-author-role],[data-testid^="conversation-turn-"],main article,main [class*="markdown"],main [class*="prose"],main pre'
+      ));
       const seen = new Set();
       const result = [];
       const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
@@ -70,7 +72,7 @@ def _snapshot_turns(page) -> list[dict]:
         const articleIndex = turn.tagName?.toLowerCase() === 'article'
           ? Array.from(document.querySelectorAll('main article')).indexOf(turn)
           : -1;
-        const key = messageId || testId || `${role || 'turn'}:${articleIndex}:${text.slice(0, 80)}`;
+        const key = messageId || testId || `${role || 'turn'}:${articleIndex}:${text.slice(0, 96)}`;
         result.push({ key, role, text, messageId, testId, articleIndex });
       }
       return result;
@@ -100,13 +102,12 @@ def _is_new_turn(turn: dict, baseline: dict) -> bool:
 def _select_reply_candidate(turns: list[dict], baseline: dict, prompt: str) -> dict | None:
     new_turns = [turn for turn in turns if _is_new_turn(turn, baseline)]
 
-    # Explicit assistant role wins immediately.
     for turn in reversed(new_turns):
         if str(turn.get("role", "")).lower() == "assistant" and not _looks_like_prompt(str(turn.get("text", "")), prompt):
             return turn
 
-    # Generic conversation-turn/article fallback. This covers ChatGPT UI variants where
-    # data-message-author-role is omitted from the rendered turn container.
+    # Fallback for modern ChatGPT variants where the visible conversation turn is an
+    # article/testid/markdown container without data-message-author-role.
     for turn in reversed(new_turns):
         role = str(turn.get("role", "")).lower()
         text = _norm(str(turn.get("text", "")))
@@ -121,7 +122,8 @@ def _locate_turn(page, turn: dict):
     message_id = str(turn.get("messageId", "") or "")
     test_id = str(turn.get("testId", "") or "")
     role = str(turn.get("role", "") or "")
-    article_index = int(turn.get("articleIndex", -1) or -1)
+    raw_article_index = turn.get("articleIndex", -1)
+    article_index = int(raw_article_index) if raw_article_index is not None else -1
     if message_id:
         return page.locator(f'[data-message-id="{message_id}"]').last
     if test_id:
@@ -130,7 +132,7 @@ def _locate_turn(page, turn: dict):
         return page.locator('[data-message-author-role="assistant"]').last
     if article_index >= 0:
         return page.locator('main article').nth(article_index)
-    return page.locator('main article,[data-testid^="conversation-turn-"]').last
+    return page.locator('main [class*="markdown"],main [class*="prose"],main pre,main article,[data-testid^="conversation-turn-"]').last
 
 
 def _composer_value(composer) -> str:
@@ -176,40 +178,50 @@ def _fill_and_send_v113(self, prompt: str):
     except Exception:
         composer.press("Enter")
 
-    # Confirm dispatch instead of blindly entering the response wait. Current ChatGPT
-    # normally clears/disables the composer or creates the user turn almost immediately.
     deadline = time.time() + 18
     while time.time() < deadline:
         _human_gate(self.page)
         current = _composer_value(composer)
         turns = _snapshot_turns(self.page)
         if not current or len(current) < max(12, len(_norm(prompt)) // 5):
-            return {"method": "button" if sent_with_button else "enter", "turns": turns}
-        if any(str(turn.get("role", "")).lower() == "user" and _looks_like_prompt(str(turn.get("text", "")), prompt) for turn in turns):
-            return {"method": "button" if sent_with_button else "enter", "turns": turns}
+            return
+        if any(
+            str(turn.get("role", "")).lower() == "user"
+            and _looks_like_prompt(str(turn.get("text", "")), prompt)
+            for turn in turns
+        ):
+            return
         if (self.page.url or "").startswith("https://chatgpt.com/c/"):
-            return {"method": "button" if sent_with_button else "enter", "turns": turns}
+            return
         time.sleep(0.3)
 
+    method = "Send button" if sent_with_button else "Enter key"
     raise RuntimeError(
-        "ZeroReels filled ChatGPT, but the prompt never appeared to send. Open the ChatGPT profile and check for a popup, disabled Send button, or usage-limit message."
+        f"ZeroReels filled ChatGPT and used the {method}, but the prompt never appeared to dispatch. "
+        "Open the ChatGPT profile and check for a popup, disabled Send button, or usage-limit message."
     )
 
 
 def _wait_response_v113(self, baseline, timeout_ms: int = 180000, prompt: str = ""):
-    # Accept the old integer baseline for compatibility with any callers not yet patched.
     if isinstance(baseline, int):
-        snap = _baseline_snapshot(self.page)
-        snap["legacy_count"] = baseline
-        baseline = snap
+        # Legacy compatibility. New text/image callers below always supply a full snapshot.
+        current = _snapshot_turns(self.page)
+        assistant_seen = [t for t in current if str(t.get("role", "")).lower() == "assistant"]
+        old = assistant_seen[: max(0, baseline)]
+        baseline = {
+            "turns": old,
+            "keys": {str(t.get("key", "")) for t in old},
+            "texts": {_norm(str(t.get("text", ""))) for t in old},
+        }
 
-    overall_deadline = time.time() + max(30, timeout_ms / 1000)
-    no_reply_deadline = min(overall_deadline, time.time() + 90)
+    started = time.time()
+    overall_deadline = started + max(30, timeout_ms / 1000)
+    no_reply_deadline = min(overall_deadline, started + 90)
+    hard_no_reply_deadline = min(overall_deadline, started + 120)
     selected = None
     selected_locator = None
     last_text = ""
     stable_since = time.time()
-    last_activity = time.time()
 
     while time.time() < overall_deadline:
         _human_gate(self.page)
@@ -221,13 +233,11 @@ def _wait_response_v113(self, baseline, timeout_ms: int = 180000, prompt: str = 
                 selected_locator = _locate_turn(self.page, candidate)
                 last_text = ""
                 stable_since = time.time()
-                last_activity = time.time()
 
             text = _norm(str(candidate.get("text", "")))
             if text and text != last_text:
                 last_text = text
                 stable_since = time.time()
-                last_activity = time.time()
             else:
                 stop_visible = False
                 try:
@@ -237,25 +247,22 @@ def _wait_response_v113(self, baseline, timeout_ms: int = 180000, prompt: str = 
                 if last_text and not stop_visible and time.time() - stable_since >= 1.8:
                     return selected_locator, last_text
 
-            # Once a response has visibly started, allow the configured overall timeout.
+            # We can see the answer streaming, so use the caller's full completion timeout.
             no_reply_deadline = overall_deadline
         else:
-            # A stop button or a fresh /c/ thread means ChatGPT is doing something; extend
-            # the no-reply deadline modestly but never past the overall caller timeout.
             active = False
             try:
                 active = self.page.locator(STOP_QUERY).count() > 0
             except Exception:
                 pass
             if active:
-                last_activity = time.time()
-                no_reply_deadline = min(overall_deadline, time.time() + 45)
+                no_reply_deadline = min(hard_no_reply_deadline, time.time() + 30)
 
         if time.time() >= no_reply_deadline:
             latest = _snapshot_turns(self.page)
-            tail = " | ".join(_norm(str(t.get("text", "")))[:160] for t in latest[-3:])
+            tail = " | ".join(_norm(str(t.get("text", "")))[:180] for t in latest[-3:])
             raise RuntimeError(
-                "ChatGPT accepted the prompt, but ZeroReels could not detect a new assistant turn within 90 seconds. "
+                "ChatGPT accepted the prompt, but ZeroReels could not detect the assistant response. "
                 f"Current page: {self.page.url}. Recent visible turns: {tail or 'none detected'}."
             )
         time.sleep(0.35)
@@ -275,22 +282,64 @@ def _ask_text_v113(self, prompt: str, *, new_chat: bool = True, timeout_ms: int 
     return text
 
 
-def _generate_image_v113(self, prompt, out_base, *, timeout_ms: int = 360000):
-    # Reuse the existing image-generation path, but temporarily give it the modern
-    # response helpers so the same conversation-turn fix applies to image requests too.
-    return _ORIGINAL_GENERATE_IMAGE(self, prompt, out_base, timeout_ms=timeout_ms)
+def _generate_image_v113(self, prompt: str, out_base, *, timeout_ms: int = 360000):
+    self.open()
+    self.new_chat()
+    baseline = _baseline_snapshot(self.page)
+    try:
+        baseline_sources = set(
+            self.page.locator(
+                '[data-message-author-role="assistant"] img,[data-testid^="conversation-turn-"] img,main article img'
+            ).evaluate_all("imgs => imgs.map(i => i.currentSrc || i.src).filter(Boolean)")
+        )
+    except Exception:
+        baseline_sources = set()
 
+    self.image_candidates = []
+    self._generation_started = time.time()
+    request = (
+        "Generate the image now. Do not just describe it. Create one polished visual for a short-form video.\n\n"
+        + prompt
+        + "\n\nNo captions, no visible UI, no watermark, no logo, and avoid accidental readable text unless specifically required."
+    )
 
-_ORIGINAL_GENERATE_IMAGE = browser_ai.ChatGPTBrowserClient.generate_image
+    try:
+        _fill_and_send_v113(self, request)
+        message, response_text = _wait_response_v113(self, baseline, timeout_ms, request)
+        deadline = time.time() + 45
+        while time.time() < deadline:
+            if self.image_candidates:
+                best = self.image_candidates[0]
+                if best["width"] >= 768 and best["height"] >= 768:
+                    break
+            time.sleep(0.5)
+    finally:
+        self._generation_started = 0.0
+
+    if self.image_candidates:
+        best = self.image_candidates[0]
+        target = out_base.with_suffix(best["ext"])
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(best["body"])
+        return target
+
+    dom = self._dom_image_bytes(message, baseline_sources)
+    if dom:
+        raw, ext = dom
+        target = out_base.with_suffix(ext)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(raw)
+        return target
+
+    compact = browser_ai._clean(response_text)[:500]
+    raise RuntimeError("ChatGPT did not return a generated image. " + compact)
 
 
 def install() -> None:
     browser_ai.ChatGPTBrowserClient._fill_and_send = _fill_and_send_v113
     browser_ai.ChatGPTBrowserClient._wait_response = _wait_response_v113
     browser_ai.ChatGPTBrowserClient.ask_text = _ask_text_v113
-
-    # Keep the image path compatible: it still calls _fill_and_send/_wait_response, which
-    # are patched above. No separate duplicate implementation is needed.
+    browser_ai.ChatGPTBrowserClient.generate_image = _generate_image_v113
 
     previous_sidebar = ui.MainWindow._sidebar
 
