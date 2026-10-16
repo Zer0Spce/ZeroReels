@@ -68,6 +68,7 @@ class Project:
     script_model_mode: str = "Auto Quality"
     script_model_used: str = ""
     script_quality_summary: str = ""
+    chatgpt_new_chat: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
